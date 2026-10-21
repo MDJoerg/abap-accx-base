@@ -89,7 +89,7 @@ All contracts live in `ZACCX_CORE` and are free of SDK types.
 | `ZIF_ACCX_LOGGER` | `ZCL_ACCX_LOGGER_DB` | Audit log of every tool call into `ZACCX_LOG` |
 | `ZIF_ACCX_PRIVACY` | `ZCL_ACCX_PRIVACY_NONE`, `ZCL_ACCX_PRIVACY_WITHHOLD` | Privacy strategy: `protect_result` (outgoing data), `resolve_args` (incoming pseudonyms) |
 | `ZIF_ACCX_AUTHORIZER` | `ZCL_ACCX_AUTHORIZER` (allows), `ZCL_ACCX_AUTHORIZER_DENY` (denies) | Usage authorization extension point: `check_endpoint`, `check_tool` |
-| `ZIF_ACCX_CALLER_GUARD` | `ZCL_ACCX_CALLER_GUARD` | Data-level display checks of the caller (users, user groups, roles, profiles, authorizations, change documents), cached per request |
+| `ZIF_ACCX_CALLER_GUARD` | `ZCL_ACCX_CALLER_GUARD` | Data-level display checks of the caller (users, user groups, roles, profiles, authorizations, change documents, privileged CDS data preview), cached per request |
 | `ZIF_ACCX_PLAN_STORE` | `ZCL_ACCX_PLAN_STORE` | Plans of write tools in `ZACCX_PLAN`: `create`, `get`, `claim` (once), `close`, `cleanup` |
 | – | `ZCL_ACCX_FACTORY` | Creates all core collaborators from the profile configuration; test seam (`inject`, `reset`) |
 | – | `ZCX_ACCX_ERROR` | Exception carrying a result status and an LLM-readable message |
@@ -186,6 +186,7 @@ The core runs on any plain ABAP stack. Solution-specific or risky functionality 
   - users and user groups: `S_USER_GRP` activity 03 (change documents: 08)
   - roles: `S_USER_AGR` activity 03 (change documents: 08)
   - profiles: `S_USER_PRO` 03; authorizations: `S_USER_AUT` 03
+  - row counts of CDS entities without access control (`simulate_cds_access`): the ADT data preview check with DCL override (`S_DEVELOP`)
   - Rows the caller may not display are removed and counted (`hidden_by_authorization`), never silently dropped. The SUIM APIs and the SU53 reader check the caller themselves.
 - **No own authorization object.** ACCX deliberately ships none. Usage authorization is decided in the customer project:
   1. Create an authorization object in the customer namespace (e.g. with fields for profile, tool group and activity).
@@ -270,7 +271,7 @@ Stability classes:
 | `ZIF_ACCX_FAILURE_SOURCE` | Failed checks of a user (SU53 of all application servers, user trace), trace status | `SUSR_USER_SU53_READ` (checks the caller), `SUAUTH_READ_USER_TRACE`, `CL_SUSR_TOOLS_KERNEL`, `SUAUTHVALFILTER` | B |
 | `ZIF_ACCX_PROPOSAL_SOURCE` | SU24 proposals of transactions and service hashes | `USOBX_C`, `USOBT_C` | B |
 | `ZIF_ACCX_FIORI_REPO` | Catalogs, tiles, target mappings, groups, spaces, pages, launchpad settings, authorization defaults of catalogs, OData services, ICF | FDM public catalog and group API (package interface `/UI2/FDM_PUBLIC_API_EXT`) (A); FDM space and page API, `/UI2/CL_FLP_SETTINGS_API`, UI5 app index, `AGR_HIER`/`AGR_BUFFI`, `/IWFND/I_MED_SRH`, `/IWFND/C_MGDEAM`, `ICFSERVICE`, `USOBHASH` (B); `/UI2/CL_CATALOG_DETAIL` (PFCG catalog details) (B/C) | A / B / C |
-| `ZIF_ACCX_CDS_ACCESS` | CDS entities, access control annotation, DCL roles, exposing service definitions and bindings | `DDLDEPENDENCY`, `DD02B`, `DDHEADANNO`, `DDDDLSRCT`, `TADIR`, `ACMDCLMETADATA`, `ACMDCLSRC`, `SRVD_RT_ENTITIES`, `SRVB_SERVICES`, `/IWFND/I_MED_SRH`, `/IWFND/C_V4_MSGR` (B); DCL source analysed as text (`ZCL_ACCX_DCL_ANALYZER`) (C) | B / C |
+| `ZIF_ACCX_CDS_ACCESS` | CDS entities, access control annotation, DCL roles, exposing service definitions and bindings | `DDLDEPENDENCY`, `DD02B`, `DDHEADANNO`, `DDDDLSRCT`, `TADIR`, `ACMDCLMETADATA`, `ACMDCLSRC`, `SRVD_RT_ENTITIES`, `SRVB_SERVICES`, `/IWFND/I_MED_SRH`, `/IWFND/C_V4_MSGR` (B); DCL source analysed as text (`ZCL_ACCX_DCL_ANALYZER`) (C); access restrictions for a user from the ACM runtime `CL_ACMRT_KERNEL_PROXY` (`IF_ACMRT_RUNTIME~GET_ACCESS_RESTRICTIONS`, as SACMSEL) (B); row counts with `SELECT COUNT(*) ... WITH PRIVILEGED ACCESS` (A) | B / C |
 | `ZIF_ACCX_CHANGE_REPO` | Change documents of roles and users | `CDHDR`, `CDPOS` (objects PFCG, IDENTITY), `USH02` | B |
 | `ZIF_ACCX_ROLE_CHANGER` (plugin ADMIN) | Incremental role change, composite roles, derived roles, generation | `CL_PFCG_MENU_MODIFY`, `PRGN_AUTO_GENERATE_PROFILE_NEW`, `PRGN_RFC_*`, `PRGN_COPY_AGR`, `SUPRN_TRANSFER_AUTH_DATA` (B); values for open fields written to `AGR_1251` with change documents (C) | B / C |
 | `ZIF_ACCX_ASSIGNMENT_WRITER` (plugin ADMIN) | Direct role assignments of a user | `BAPI_USER_GET_DETAIL`, `BAPI_USER_ACTGROUPS_ASSIGN` (check the caller, write change documents) | A |

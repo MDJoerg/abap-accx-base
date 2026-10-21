@@ -89,7 +89,7 @@ Alle Verträge liegen in `ZACCX_CORE` und sind frei von SDK-Typen.
 | `ZIF_ACCX_LOGGER` | `ZCL_ACCX_LOGGER_DB` | Audit-Log jedes Tool-Aufrufs in `ZACCX_LOG` |
 | `ZIF_ACCX_PRIVACY` | `ZCL_ACCX_PRIVACY_NONE`, `ZCL_ACCX_PRIVACY_WITHHOLD` | Datenschutz-Strategie: `protect_result` (ausgehende Daten), `resolve_args` (eingehende Pseudonyme) |
 | `ZIF_ACCX_AUTHORIZER` | `ZCL_ACCX_AUTHORIZER` (erlaubt), `ZCL_ACCX_AUTHORIZER_DENY` (verweigert) | Erweiterungspunkt Nutzungsberechtigung: `check_endpoint`, `check_tool` |
-| `ZIF_ACCX_CALLER_GUARD` | `ZCL_ACCX_CALLER_GUARD` | Datenbezogene Anzeigeprüfungen des Aufrufers (Benutzer, Benutzergruppen, Rollen, Profile, Berechtigungen, Änderungsbelege), pro Request gepuffert |
+| `ZIF_ACCX_CALLER_GUARD` | `ZCL_ACCX_CALLER_GUARD` | Datenbezogene Anzeigeprüfungen des Aufrufers (Benutzer, Benutzergruppen, Rollen, Profile, Berechtigungen, Änderungsbelege, privilegierte CDS-Datenvorschau), pro Request gepuffert |
 | `ZIF_ACCX_PLAN_STORE` | `ZCL_ACCX_PLAN_STORE` | Pläne schreibender Tools in `ZACCX_PLAN`: `create`, `get`, `claim` (einmalig), `close`, `cleanup` |
 | – | `ZCL_ACCX_FACTORY` | Erzeugt alle Core-Bausteine aus der Profilkonfiguration; Test-Seam (`inject`, `reset`) |
 | – | `ZCX_ACCX_ERROR` | Ausnahme mit Ergebnisstatus und einer für das LLM lesbaren Meldung |
@@ -186,6 +186,7 @@ Der Core läuft auf jedem nackten ABAP-Stack. Lösungsspezifische oder riskante 
   - Benutzer und Benutzergruppen: `S_USER_GRP` Aktivität 03 (Änderungsbelege: 08)
   - Rollen: `S_USER_AGR` Aktivität 03 (Änderungsbelege: 08)
   - Profile: `S_USER_PRO` 03; Berechtigungen: `S_USER_AUT` 03
+  - Zeilenzahlen von CDS-Entitäten ohne Zugriffskontrolle (`simulate_cds_access`): Prüfung der ADT-Datenvorschau mit DCL-Übersteuerung (`S_DEVELOP`)
   - Zeilen, die der Aufrufer nicht anzeigen darf, werden entfernt und gezählt (`hidden_by_authorization`), nie stillschweigend unterschlagen. Die SUIM-APIs und der SU53-Reader prüfen den Aufrufer selbst.
 - **Kein eigenes Berechtigungsobjekt.** ACCX liefert bewusst keines aus. Die Nutzungsberechtigung wird im Kundenprojekt entschieden:
   1. Berechtigungsobjekt im Kundennamensraum anlegen (z. B. mit Feldern für Profil, Tool-Gruppe und Aktivität).
@@ -270,7 +271,7 @@ Stabilitätsklassen:
 | `ZIF_ACCX_FAILURE_SOURCE` | Fehlgeschlagene Prüfungen eines Benutzers (SU53 aller Applikationsserver, Benutzer-Trace), Trace-Status | `SUSR_USER_SU53_READ` (prüft den Aufrufer), `SUAUTH_READ_USER_TRACE`, `CL_SUSR_TOOLS_KERNEL`, `SUAUTHVALFILTER` | B |
 | `ZIF_ACCX_PROPOSAL_SOURCE` | SU24-Vorschlagswerte von Transaktionen und Service-Hashes | `USOBX_C`, `USOBT_C` | B |
 | `ZIF_ACCX_FIORI_REPO` | Kataloge, Kacheln, Target Mappings, Gruppen, Spaces, Pages, Launchpad-Einstellungen, Berechtigungsvorschläge von Katalogen, OData-Services, ICF | Öffentliche FDM-Katalog- und Gruppen-API (Paketschnittstelle `/UI2/FDM_PUBLIC_API_EXT`) (A); FDM-Space- und Page-API, `/UI2/CL_FLP_SETTINGS_API`, UI5 App Index, `AGR_HIER`/`AGR_BUFFI`, `/IWFND/I_MED_SRH`, `/IWFND/C_MGDEAM`, `ICFSERVICE`, `USOBHASH` (B); `/UI2/CL_CATALOG_DETAIL` (PFCG-Katalogdetails) (B/C) | A / B / C |
-| `ZIF_ACCX_CDS_ACCESS` | CDS-Entitäten, Annotation zur Zugriffskontrolle, DCL-Rollen, exponierende Service-Definitionen und -Bindings | `DDLDEPENDENCY`, `DD02B`, `DDHEADANNO`, `DDDDLSRCT`, `TADIR`, `ACMDCLMETADATA`, `ACMDCLSRC`, `SRVD_RT_ENTITIES`, `SRVB_SERVICES`, `/IWFND/I_MED_SRH`, `/IWFND/C_V4_MSGR` (B); DCL-Quelltext als Text analysiert (`ZCL_ACCX_DCL_ANALYZER`) (C) | B / C |
+| `ZIF_ACCX_CDS_ACCESS` | CDS-Entitäten, Annotation zur Zugriffskontrolle, DCL-Rollen, exponierende Service-Definitionen und -Bindings | `DDLDEPENDENCY`, `DD02B`, `DDHEADANNO`, `DDDDLSRCT`, `TADIR`, `ACMDCLMETADATA`, `ACMDCLSRC`, `SRVD_RT_ENTITIES`, `SRVB_SERVICES`, `/IWFND/I_MED_SRH`, `/IWFND/C_V4_MSGR` (B); DCL-Quelltext als Text analysiert (`ZCL_ACCX_DCL_ANALYZER`) (C); Zugriffsbeschränkungen für einen Benutzer aus der ACM-Laufzeit `CL_ACMRT_KERNEL_PROXY` (`IF_ACMRT_RUNTIME~GET_ACCESS_RESTRICTIONS`, wie SACMSEL) (B); Zeilenzahlen mit `SELECT COUNT(*) ... WITH PRIVILEGED ACCESS` (A) | B / C |
 | `ZIF_ACCX_CHANGE_REPO` | Änderungsbelege zu Rollen und Benutzern | `CDHDR`, `CDPOS` (Objekte PFCG, IDENTITY), `USH02` | B |
 | `ZIF_ACCX_ROLE_CHANGER` (Plugin ADMIN) | Inkrementelle Rollenänderung, Sammelrollen, abgeleitete Rollen, Generierung | `CL_PFCG_MENU_MODIFY`, `PRGN_AUTO_GENERATE_PROFILE_NEW`, `PRGN_RFC_*`, `PRGN_COPY_AGR`, `SUPRN_TRANSFER_AUTH_DATA` (B); Werte für offene Felder direkt in `AGR_1251` mit Änderungsbelegen (C) | B / C |
 | `ZIF_ACCX_ASSIGNMENT_WRITER` (Plugin ADMIN) | Direkte Rollenzuordnungen eines Benutzers | `BAPI_USER_GET_DETAIL`, `BAPI_USER_ACTGROUPS_ASSIGN` (prüfen den Aufrufer, schreiben Änderungsbelege) | A |
