@@ -109,6 +109,24 @@ CLASS zcl_accx_caller_guard IMPLEMENTATION.
     result = remember( key = key allowed = xsdbool( sy-subrc = 0 ) ).
   ENDMETHOD.
 
+  METHOD zif_accx_caller_guard~can_preview_privileged.
+    DATA(key) = |DP:{ entity }|.
+    cached( EXPORTING key = key IMPORTING found = DATA(found) allowed = result ).
+    IF found = abap_true.
+      RETURN.
+    ENDIF.
+    TRY.
+        cl_data_prev_auth_chk_factory=>get_auth_check_instance( )->check_authorization(
+          EXPORTING iv_object_name  = entity
+                    iv_override_dcl = abap_true
+          IMPORTING ev_authorized   = DATA(authorized) ).
+      CATCH cx_root ##CATCH_ALL.
+        " the check raises an exception when the caller is not authorized
+        authorized = abap_false.
+    ENDTRY.
+    result = remember( key = key allowed = authorized ).
+  ENDMETHOD.
+
   METHOD cached.
     READ TABLE decisions INTO DATA(decision) WITH TABLE KEY key = key.
     found   = xsdbool( sy-subrc = 0 ).

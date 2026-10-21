@@ -111,8 +111,11 @@ CLASS ltc_get_cds_access IMPLEMENTATION.
                                          act = result-summary ).
     cl_abap_unit_assert=>assert_char_cp( exp = `*- ZSD_A as A, binding ZUI_A_O2 - published V2*- service definition ZSD_A2 (not bound) - not published*`
                                          act = result-summary ).
-    cl_abap_unit_assert=>assert_equals( exp = 1 act = lines( result-next_steps ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 2 act = lines( result-next_steps ) ).
     cl_abap_unit_assert=>assert_char_cp( exp = `Users see rows only with F_BKPF_BUK*` act = result-next_steps[ 1 ] ).
+    cl_abap_unit_assert=>assert_equals( exp = `simulate_cds_access with a user and ZI_A evaluates the conditions for that user.`
+                                        act = result-next_steps[ 2 ] ).
+    cl_abap_unit_assert=>assert_initial( result-warnings ).
   ENDMETHOD.
 
   METHOD unprotected_published.

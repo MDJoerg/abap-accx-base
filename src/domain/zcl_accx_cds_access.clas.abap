@@ -1,7 +1,8 @@
 "! <p class="shorttext synchronized">Access Explorer: CDS access control from DB</p>
 "! Sources: DDLDEPENDENCY, DD02B, DDHEADANNO, DDDDLSRCT, TADIR (entities), ACMDCLMETADATAEN,
 "! ACMDCLMETADATA, ACMDCLSRC (DCL roles), SRVD_RT_ENTITIES, SRVB_SERVICES (exposures),
-"! /IWFND/I_MED_SRH (OData V2), /IWFND/C_V4_MSGR (published OData V4 service groups).
+"! /IWFND/I_MED_SRH (OData V2), /IWFND/C_V4_MSGR (published OData V4 service groups);
+"! evaluation for a user through the ACM runtime (CL_ACMRT_KERNEL_PROXY, as SACMSEL).
 CLASS zcl_accx_cds_access DEFINITION PUBLIC CREATE PUBLIC.
 
   PUBLIC SECTION.
@@ -209,6 +210,63 @@ CLASS zcl_accx_cds_access IMPLEMENTATION.
       ENDIF.
     ENDLOOP.
     exposures = completed.
+  ENDMETHOD.
+
+  METHOD zif_accx_cds_access~evaluate.
+    TRY.
+        " class reference, not interface: classified as secure API (ACM_SLIN_SEC_NO_SQL_INJECTION)
+        DATA(runtime) = CAST cl_acmrt_kernel_proxy( cl_acmrt_kernel_proxy=>get_instance( ) ).
+        runtime->if_acmrt_runtime~get_access_restrictions(
+          EXPORTING iv_subject                 = CONV #( user )
+                    iv_resource                = CONV #( entity )
+                    iv_exfiltrate_simple_paths = abap_true
+          IMPORTING ev_auth_result              = DATA(auth_result)
+                    ev_where_merging            = DATA(where_merging)
+                    ev_where_merging_expression = DATA(expression)
+                    et_expression_values        = DATA(values)
+                    et_cell_rules               = DATA(cell_rules) ).
+      CATCH cx_root INTO DATA(error) ##CATCH_ALL.
+        result-error = error->get_text( ).
+        RETURN.
+    ENDTRY.
+    result-masked_elements = VALUE #( FOR c IN cell_rules ( CONV #( c-element_name ) ) ).
+    CASE auth_result.
+      WHEN if_acmrt_constants=>co_acm_funcauth_result-acmrt_funcauth_result_funcgran.
+        result-access = zif_accx_cds_access=>co_access-full.
+      WHEN if_acmrt_constants=>co_acm_funcauth_result-acmrt_funcauth_result_funcdeny.
+        result-access = zif_accx_cds_access=>co_access-none.
+      WHEN OTHERS.
+        result-access = zif_accx_cds_access=>co_access-restricted.
+        IF where_merging = abap_false OR expression IS INITIAL.
+          result-join_only = abap_true.
+          RETURN.
+        ENDIF.
+        " :V_VALUE(10) before :V_VALUE(1)
+        SORT values BY value_index DESCENDING.
+        LOOP AT values INTO DATA(value).
+          REPLACE ALL OCCURRENCES OF value-host_variable IN expression WITH cl_abap_dyn_prg=>quote( value-current_value ).
+        ENDLOOP.
+        result-condition = expression.
+    ENDCASE.
+  ENDMETHOD.
+
+  METHOD zif_accx_cds_access~count_rows.
+    DATA(from) = |{ entity } WITH PRIVILEGED ACCESS|.
+    TRY.
+        SELECT COUNT(*) FROM (from) INTO @result-total BYPASSING BUFFER.
+        CASE access.
+          WHEN zif_accx_cds_access=>co_access-full.
+            result-visible = result-total.
+          WHEN zif_accx_cds_access=>co_access-restricted.
+            IF condition IS INITIAL.
+              result-error = `The condition needs a join and cannot be counted.`.
+              RETURN.
+            ENDIF.
+            SELECT COUNT(*) FROM (from) WHERE (condition) INTO @result-visible BYPASSING BUFFER.
+        ENDCASE.
+      CATCH cx_root INTO DATA(error) ##CATCH_ALL.
+        result-error = error->get_text( ).
+    ENDTRY.
   ENDMETHOD.
 
 ENDCLASS.

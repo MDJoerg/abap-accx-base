@@ -49,6 +49,32 @@ INTERFACE zif_accx_cds_access PUBLIC.
          END OF ty_exposure,
          ty_exposures TYPE STANDARD TABLE OF ty_exposure WITH EMPTY KEY.
 
+  CONSTANTS: BEGIN OF co_access,
+               full       TYPE string VALUE `full`,
+               none       TYPE string VALUE `none`,
+               restricted TYPE string VALUE `restricted`,
+             END OF co_access.
+
+  TYPES: BEGIN OF ty_evaluation,
+           "! see CO_ACCESS; empty when the runtime failed
+           access          TYPE string,
+           "! restricted: WHERE condition of the ACM runtime with the user's values inserted
+           condition       TYPE string,
+           "! restricted, but the condition needs a join (runtime CTE) and is not given as WHERE condition
+           join_only       TYPE abap_bool,
+           "! elements masked by cell rules (grant select ... for elements)
+           masked_elements TYPE string_table,
+           error           TYPE string,
+         END OF ty_evaluation.
+
+  TYPES: BEGIN OF ty_row_count,
+           "! rows the user sees
+           visible TYPE int8,
+           "! rows without access control (WITH PRIVILEGED ACCESS)
+           total   TYPE int8,
+           error   TYPE string,
+         END OF ty_row_count.
+
   "! CDS entities by name (upper case), with annotation, kind and package; unknown names are left out
   METHODS get_entities
     IMPORTING !names        TYPE ty_names
@@ -71,5 +97,20 @@ INTERFACE zif_accx_cds_access PUBLIC.
     IMPORTING !names        TYPE ty_names
               !packages     TYPE ty_names OPTIONAL
     RETURNING VALUE(result) TYPE ty_exposures.
+
+  "! Access restrictions of the ACM runtime for a user on an entity (SELECT), as SACMSEL
+  "! shows them with enforcement layer None; reads no data
+  METHODS evaluate DEFAULT IGNORE
+    IMPORTING !user         TYPE syuname
+              !entity       TYPE string
+    RETURNING VALUE(result) TYPE ty_evaluation.
+
+  "! Number of rows of the entity in total and under the condition (empty condition = all rows,
+  "! none = no visible rows); access control is bypassed, no row content is read
+  METHODS count_rows DEFAULT IGNORE
+    IMPORTING !entity       TYPE string
+              !access       TYPE string
+              !condition    TYPE string OPTIONAL
+    RETURNING VALUE(result) TYPE ty_row_count.
 
 ENDINTERFACE.

@@ -41,4 +41,11 @@ INTERFACE zif_accx_caller_guard PUBLIC.
     IMPORTING !role         TYPE agr_name
     RETURNING VALUE(result) TYPE abap_bool.
 
+  "! Caller may preview the data of the CDS entity in ADT bypassing its access control
+  "! (S_DEVELOP on the package, as SACMSEL and the ADT data preview check it)
+  "! - required before rows are counted for another user
+  METHODS can_preview_privileged DEFAULT IGNORE
+    IMPORTING !entity       TYPE string
+    RETURNING VALUE(result) TYPE abap_bool.
+
 ENDINTERFACE.

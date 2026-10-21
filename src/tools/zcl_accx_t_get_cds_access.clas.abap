@@ -65,7 +65,7 @@ CLASS zcl_accx_t_get_cds_access IMPLEMENTATION.
                     |with their conditions (aspect pfcg_auth with authorization object, fields and fixed values such as | &&
                     |ACTVT, inherited conditions, aspect user), whether the entity is effectively protected for SELECT, the | &&
                     |authorization objects users need, and the OData services exposing it (service definition, binding, | &&
-                    |published as V2 or V4, @OData.publish). Conditions are read from the DCL source, not evaluated for a user.|
+                    |published as V2 or V4, @OData.publish). Conditions are read from the DCL source; simulate_cds_access evaluates them for a user.|
       group       = zif_accx_types=>co_group-data
       read_only   = abap_true
       idempotent  = abap_true
@@ -186,7 +186,9 @@ CLASS zcl_accx_t_get_cds_access IMPLEMENTATION.
       APPEND |get_cds_access_control { inherited } shows the inherited conditions.| TO result-next_steps.
       EXIT.
     ENDLOOP.
-    APPEND `simulate_cds_access (planned) will evaluate the conditions for one user; until then use transaction SACMSEL.` TO result-warnings.
+    IF payload->roles IS NOT INITIAL.
+      APPEND |simulate_cds_access with a user and { name } evaluates the conditions for that user.| TO result-next_steps.
+    ENDIF.
   ENDMETHOD.
 
   METHOD exposure_text.

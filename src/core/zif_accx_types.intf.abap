@@ -4,7 +4,7 @@
 INTERFACE zif_accx_types PUBLIC.
 
   "! Product release, semantic versioning MAJOR.MINOR.PATCH (see KTD of package ZACCX)
-  CONSTANTS co_release TYPE string VALUE `0.32.0`.
+  CONSTANTS co_release TYPE string VALUE `0.33.0`.
 
   " Result status values
   CONSTANTS: BEGIN OF co_status,

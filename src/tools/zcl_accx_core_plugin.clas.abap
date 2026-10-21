@@ -44,7 +44,8 @@ CLASS zcl_accx_core_plugin IMPLEMENTATION.
                       ( NEW zcl_accx_t_user_hygiene( ) )
                       ( NEW zcl_accx_t_get_auth_changes( ) )
                       ( NEW zcl_accx_t_get_cds_access( ) )
-                      ( NEW zcl_accx_t_find_unprot_cds( ) ) ).
+                      ( NEW zcl_accx_t_find_unprot_cds( ) )
+                      ( NEW zcl_accx_t_simulate_cds( ) ) ).
   ENDMETHOD.
 
 ENDCLASS.
