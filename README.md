@@ -23,6 +23,7 @@ separate plugin and need a write profile, a stored plan and an explicit confirma
 | | English | Deutsch |
 |---|---|---|
 | User guide (tools, scenarios, limits) | [docs/en/user-guide.md](docs/en/user-guide.md) | [docs/de/user-guide.md](docs/de/user-guide.md) |
+| Overview (package structure, MCP flow, Copilot Studio example) | [docs/en/overview.md](docs/en/overview.md) | [docs/de/overview.md](docs/de/overview.md) |
 | Architecture (layers, packages, security) | [docs/en/architecture.md](docs/en/architecture.md) | [docs/de/architecture.md](docs/de/architecture.md) |
 | Change history | [CHANGELOG.md](CHANGELOG.md) | |
 
@@ -39,13 +40,73 @@ ACCX is split into abapGit repositories, one per ABAP package tree:
 | [abap-accx-gui](https://github.com/MDJoerg/abap-accx-gui) | `ZACCX_GUI` | Report to maintain the server profiles | optional |
 | [abap-accx-test](https://github.com/MDJoerg/abap-accx-test) | `ZACCX_TEST` | Test roles and test data setup for integration tests | optional, not for production |
 
-The core in `ZACCX` does not know the MCP SDK. Only `ZACCX_MCP2` depends on it, so the
-transport layer can be replaced without touching the tools.
+The core in `ZACCX` does not know any MCP SDK. Only the adapters `ZACCX_MCP2` and
+`ZACCX_MCP1` depend on one, so the transport layer can be replaced without touching the tools.
+
+## Package structure
+
+Every box is an ABAP package and an abapGit repository of its own; an arrow means "depends
+on". Blue is the product, yellow the **variants** (pick the adapter that matches your MCP
+SDK, or install both), green the **options**, grey is for development only.
+
+```mermaid
+flowchart TB
+    TEST["<b>ZACCX_TEST</b><br/>abap-accx-test<br/>test roles and data – development and QA only"]
+
+    subgraph options["Options – install if you need them"]
+        ADMIN["<b>ZACCX_PLG_ADMIN</b><br/>abap-accx-plugin-admin<br/>write tools (plugin)"]
+        GUI["<b>ZACCX_GUI</b><br/>abap-accx-gui<br/>profile maintenance report"]
+    end
+
+    subgraph adapters["Transport adapter – a variant: choose mcp2 or mcp1, or install both"]
+        MCP2["<b>ZACCX_MCP2</b><br/>abap-accx-mcp2<br/>endpoint /zmcp2/"]
+        MCP1["<b>ZACCX_MCP1</b><br/>abap-accx-mcp1<br/>endpoint /zmcp/"]
+    end
+
+    subgraph product["Product – always installed"]
+        direction TB
+        TOOLS["<b>ZACCX_TOOLS</b><br/>read-only tools, prompts, resources"]
+        DOMAIN["<b>ZACCX_DOMAIN</b><br/>domain services (users, roles, Fiori, CDS, ...)"]
+        CORE["<b>ZACCX_CORE</b><br/>contracts, runtime, registry, privacy, caller guard"]
+        TOOLS --> DOMAIN --> CORE
+    end
+
+    subgraph sdk["MCP SDK – the one your adapter uses"]
+        SDK2["abap-ai/mcp2<br/><b>ZAGP_MCP2_*</b>"]
+        SDK1["abap-ai/mcp<br/><b>ZAGP_MCP_*</b>"]
+    end
+
+    TEST --> ADMIN
+    TEST --> product
+    ADMIN --> product
+    GUI --> product
+    MCP2 --> product
+    MCP1 --> product
+    MCP2 --> SDK2
+    MCP1 --> SDK1
+
+    classDef required fill:#dbeafe,stroke:#1d4ed8,color:#111;
+    classDef variant fill:#fef3c7,stroke:#b45309,color:#111;
+    classDef option fill:#dcfce7,stroke:#15803d,color:#111;
+    classDef dev fill:#f3f4f6,stroke:#6b7280,color:#111,stroke-dasharray: 4 3;
+    classDef ext fill:#ede9fe,stroke:#6d28d9,color:#111;
+    class TOOLS,DOMAIN,CORE required;
+    class MCP1,MCP2 variant;
+    class ADMIN,GUI option;
+    class TEST dev;
+    class SDK1,SDK2 ext;
+```
+
+The flow of the MCP protocol between an AI client and ACCX, with Microsoft Copilot Studio as
+an example client, is in the [overview](docs/en/overview.md#2-how-an-ai-client-talks-to-accx).
+
 
 ## Installation
 
 Prerequisites: ABAP Platform 2023 (SAP_BASIS 758; older releases are not tested),
-[abapGit](https://abapgit.org), and the [abap-ai/mcp2](https://github.com/abap-ai/mcp2) SDK.
+[abapGit](https://abapgit.org), and one MCP SDK: [abap-ai/mcp2](https://github.com/abap-ai/mcp2)
+(these steps) or the older [abap-ai/mcp](https://github.com/abap-ai/mcp), which uses
+**abap-accx-mcp1** instead of mcp2 (see its README).
 
 1. Install the mcp2 SDK and follow its setup (ICF service for `/zmcp2/`).
 2. Pull **abap-accx-base** into package `ZACCX` with abapGit. The folder logic is `PREFIX`.
@@ -82,6 +143,13 @@ ACCX prüft die Berechtigungen des aufrufenden Benutzers wie SUIM. Standardmäß
 gelesen. Schreibwerkzeuge liegen in einem eigenen Plugin und arbeiten nur mit Schreibprofil,
 gespeichertem Plan und ausdrücklicher Bestätigung.
 
-Dokumentation auf Deutsch: [Benutzerhandbuch](docs/de/user-guide.md) und
-[Architektur](docs/de/architecture.md). Die Installationsschritte stehen oben unter
+Dokumentation auf Deutsch: [Benutzerhandbuch](docs/de/user-guide.md),
+[Architektur](docs/de/architecture.md) und [Überblick](docs/de/overview.md) mit der
+Paketstruktur (welche Pakete Optionen oder Varianten sind), dem Ablauf des MCP-Protokolls
+und einem Beispiel mit Microsoft Copilot Studio. Die Installationsschritte stehen oben unter
 [Installation](#installation).
+
+Die Repositories: `abap-accx-base` (dieses, Paket `ZACCX`), die Adapter-Varianten
+`abap-accx-mcp2` und `abap-accx-mcp1`, die Optionen `abap-accx-plugin-admin` (Schreiben) und
+`abap-accx-gui` (Profilpflege) sowie `abap-accx-test` (nur Entwicklung und QS). Die
+Pakete und ihre Abhängigkeiten zeigt die Grafik unter [Package structure](#package-structure).
