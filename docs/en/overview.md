@@ -34,8 +34,8 @@ flowchart TB
     end
 
     subgraph sdk["MCP SDK – the one your adapter uses"]
-        SDK2["abap-ai/mcp2<br/><b>ZAGP_MCP2_*</b>"]
-        SDK1["abap-ai/mcp<br/><b>ZAGP_MCP_*</b>"]
+        SDK2["abap-ai/mcp2<br/><b>ZMCP2</b>"]
+        SDK1["abap-ai/mcp<br/><b>ZMCP1</b>"]
     end
 
     TEST --> ADMIN
@@ -65,7 +65,7 @@ flowchart TB
 | Yellow | **Variant**: the transport adapter for your MCP SDK. You need one; both can run side by side | `ZACCX_MCP2`, `ZACCX_MCP1` |
 | Green | **Option**: install only if you need the function | `ZACCX_PLG_ADMIN` (writing), `ZACCX_GUI` (profile maintenance) |
 | Grey, dashed | Development and QA only | `ZACCX_TEST` |
-| Purple | External SDK, not part of ACCX | `ZAGP_MCP2_*`, `ZAGP_MCP_*` |
+| Purple | External SDK, not part of ACCX | `ZMCP2`, `ZMCP1` |
 
 Why the adapters are variants: both SDKs speak MCP, but they have different classes, ICF
 nodes and registration tables. The tools never see them, so the same tools, prompts and

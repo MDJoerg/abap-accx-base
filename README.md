@@ -72,8 +72,8 @@ flowchart TB
     end
 
     subgraph sdk["MCP SDK – the one your adapter uses"]
-        SDK2["abap-ai/mcp2<br/><b>ZAGP_MCP2_*</b>"]
-        SDK1["abap-ai/mcp<br/><b>ZAGP_MCP_*</b>"]
+        SDK2["abap-ai/mcp2<br/><b>ZMCP2</b>"]
+        SDK1["abap-ai/mcp<br/><b>ZMCP1</b>"]
     end
 
     TEST --> ADMIN

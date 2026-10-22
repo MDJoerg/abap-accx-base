@@ -58,8 +58,8 @@ Ein abapGit-Repository ist eine Installationseinheit. Was unabhängig installier
 | Repository | Hauptpaket | Unterpakete | Inhalt | Abhängig von | Installation |
 |---|---|---|---|---|---|
 | [abap-accx-base](https://github.com/MDJoerg/abap-accx-base) | `ZACCX` | `ZACCX_CORE`, `ZACCX_DOMAIN`, `ZACCX_TOOLS` | Produkt: Verträge, Runtime, Registry, Privacy, Caller-Guard, Domänen-Services, lesende Tools, Konfigurationstabellen | SAP_BASIS, SAP_UI | immer |
-| [abap-accx-mcp2](https://github.com/MDJoerg/abap-accx-mcp2) | `ZACCX_MCP2` | – | MCP-Adapter für das mcp2 SDK | `ZACCX`, mcp2 SDK (`ZAGP_MCP2_*`) | wenn mcp2 der Transportweg ist |
-| [abap-accx-mcp1](https://github.com/MDJoerg/abap-accx-mcp1) | `ZACCX_MCP1` | – | MCP-Adapter für das ältere mcp SDK (`ZAGP_MCP_*`), gleiche Funktionen wie mcp2 | `ZACCX`, mcp SDK | wenn mcp (v1) der Transportweg ist |
+| [abap-accx-mcp2](https://github.com/MDJoerg/abap-accx-mcp2) | `ZACCX_MCP2` | – | MCP-Adapter für das mcp2 SDK | `ZACCX`, mcp2 SDK (`ZMCP2`) | wenn mcp2 der Transportweg ist |
+| [abap-accx-mcp1](https://github.com/MDJoerg/abap-accx-mcp1) | `ZACCX_MCP1` | – | MCP-Adapter für das ältere mcp SDK (`ZMCP1`), gleiche Funktionen wie mcp2 | `ZACCX`, mcp SDK | wenn mcp (v1) der Transportweg ist |
 | [abap-accx-plugin-admin](https://github.com/MDJoerg/abap-accx-plugin-admin) | `ZACCX_PLG_ADMIN` | – | Plugin ADMIN: schreibende Tools für Rollenpflege und Rollenzuordnung | `ZACCX` | optional |
 | [abap-accx-gui](https://github.com/MDJoerg/abap-accx-gui) | `ZACCX_GUI` | – | Report zur Pflege der Serverprofile | `ZACCX` | optional |
 | [abap-accx-test](https://github.com/MDJoerg/abap-accx-test) | `ZACCX_TEST` | – | Testdaten-Setup (Testrollen, SUIM-Testregeln) | `ZACCX`, `ZACCX_PLG_ADMIN` | nur Entwicklung / QS |
