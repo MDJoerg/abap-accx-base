@@ -105,11 +105,14 @@ CLASS zcl_accx_factory IMPLEMENTATION.
       RETURN.
     ENDIF.
     DATA(mode) = to_upper( condense( CONV string( settings-privacy_mode ) ) ).
-    IF mode IS INITIAL OR mode = co_privacy_mode-none.
-      result = NEW zcl_accx_privacy_none( ).
-    ELSE.
-      result = NEW zcl_accx_privacy_withhold( |privacy mode { mode } is not available yet| ).
-    ENDIF.
+    CASE mode.
+      WHEN space OR co_privacy_mode-none.
+        result = NEW zcl_accx_privacy_none( ).
+      WHEN co_privacy_mode-pseudonymize OR co_privacy_mode-minimize.
+        result = NEW zcl_accx_privacy_default( mode ).
+      WHEN OTHERS.
+        result = NEW zcl_accx_privacy_withhold( |privacy mode { mode } is not available| ).
+    ENDCASE.
   ENDMETHOD.
 
   METHOD authorizer.

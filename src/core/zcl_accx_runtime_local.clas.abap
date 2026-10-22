@@ -46,6 +46,19 @@ CLASS zcl_accx_runtime_local DEFINITION PUBLIC FINAL CREATE PUBLIC.
     METHODS hash_args
       IMPORTING !args         TYPE REF TO zif_accx_args
       RETURNING VALUE(result) TYPE string.
+    METHODS protect_message
+      IMPORTING !ctx    TYPE REF TO zif_accx_context
+      CHANGING  !result TYPE zif_accx_types=>ty_result.
+
+    "! Names of the tools the caller may use in the context's profile
+    METHODS visible_tools
+      IMPORTING !ctx          TYPE REF TO zif_accx_context
+      RETURNING VALUE(result) TYPE string_table.
+
+    "! Prompts of the profile whose tools are all visible; failing ones are left out
+    METHODS available_prompts
+      IMPORTING !ctx          TYPE REF TO zif_accx_context
+      RETURNING VALUE(result) TYPE zif_accx_plugin=>ty_prompts.
 
 ENDCLASS.
 
@@ -68,6 +81,86 @@ CLASS zcl_accx_runtime_local IMPLEMENTATION.
         APPEND descriptor TO result.
       ENDIF.
     ENDLOOP.
+  ENDMETHOD.
+
+  METHOD visible_tools.
+    LOOP AT zif_accx_runtime~get_catalog( ctx ) INTO DATA(descriptor).
+      APPEND descriptor-name TO result.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD available_prompts.
+    DATA(visible) = visible_tools( ctx ).
+    LOOP AT registry->get_prompts( ctx->profile( ) ) INTO DATA(prompt).
+      TRY.
+          DATA(complete) = abap_true.
+          LOOP AT prompt->get_descriptor( )-tools INTO DATA(needed).
+            IF NOT line_exists( visible[ table_line = needed ] ).
+              complete = abap_false.
+              EXIT.
+            ENDIF.
+          ENDLOOP.
+          IF complete = abap_true.
+            APPEND prompt TO result.
+          ENDIF.
+        CATCH cx_root.
+          CONTINUE.
+      ENDTRY.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD zif_accx_runtime~get_prompts.
+    LOOP AT available_prompts( ctx ) INTO DATA(prompt).
+      APPEND prompt->get_descriptor( ) TO result.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD zif_accx_runtime~get_prompt.
+    LOOP AT available_prompts( ctx ) INTO DATA(prompt).
+      IF prompt->get_descriptor( )-name <> name.
+        CONTINUE.
+      ENDIF.
+      TRY.
+          result = prompt->render( args ).
+        CATCH cx_root.
+          result = VALUE #( status  = zif_accx_types=>co_status-error
+                            message = |The prompt '{ name }' could not be prepared.| ).
+      ENDTRY.
+      RETURN.
+    ENDLOOP.
+    result = VALUE #( status  = zif_accx_types=>co_status-not_found
+                      message = |Unknown prompt '{ name }' for this server.| ).
+  ENDMETHOD.
+
+  METHOD zif_accx_runtime~get_resources.
+    LOOP AT registry->get_resources( ctx->profile( ) ) INTO DATA(resource).
+      TRY.
+          APPEND resource->get_descriptor( ) TO result.
+        CATCH cx_root.
+          CONTINUE.
+      ENDTRY.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD zif_accx_runtime~read_resource.
+    LOOP AT registry->get_resources( ctx->profile( ) ) INTO DATA(resource).
+      TRY.
+          DATA(descriptor) = resource->get_descriptor( ).
+          IF descriptor-uri <> uri.
+            CONTINUE.
+          ENDIF.
+          result = VALUE #( status    = zif_accx_types=>co_status-ok
+                            uri       = descriptor-uri
+                            mime_type = descriptor-mime_type
+                            text      = resource->read( visible_tools( ctx ) ) ).
+        CATCH cx_root.
+          result = VALUE #( status  = zif_accx_types=>co_status-error
+                            message = |The resource '{ uri }' could not be read.| ).
+      ENDTRY.
+      RETURN.
+    ENDLOOP.
+    result = VALUE #( status  = zif_accx_types=>co_status-not_found
+                      message = |Unknown resource '{ uri }' for this server.| ).
   ENDMETHOD.
 
   METHOD zif_accx_runtime~execute.
@@ -159,10 +252,12 @@ CLASS zcl_accx_runtime_local IMPLEMENTATION.
         ENDIF.
       CATCH zcx_accx_error INTO DATA(tool_error).
         result = VALUE #( status = tool_error->status summary = tool_error->get_text( ) ).
+        protect_message( EXPORTING ctx = ctx CHANGING result = result ).
         RETURN.
       CATCH cx_root INTO DATA(error).
         result = VALUE #( status  = zif_accx_types=>co_status-error
                           summary = |Internal error: { error->get_text( ) }| ).
+        protect_message( EXPORTING ctx = ctx CHANGING result = result ).
         RETURN.
     ENDTRY.
 
@@ -243,4 +338,14 @@ CLASS zcl_accx_runtime_local IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
+  METHOD protect_message.
+    " the message of a failed call may name users the strategy hides (e.g. after a
+    " pseudonym was resolved): run it through the strategy like any result
+    TRY.
+        ctx->privacy( )->protect_result( CHANGING result = result ).
+      CATCH cx_root.
+        result = VALUE #( status  = result-status
+                          summary = `Privacy processing failed - message withheld.` ).
+    ENDTRY.
+  ENDMETHOD.
 ENDCLASS.

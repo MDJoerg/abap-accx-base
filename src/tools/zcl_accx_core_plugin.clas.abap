@@ -1,5 +1,6 @@
 "! <p class="shorttext synchronized">Access Explorer: built-in CORE plugin</p>
-"! Contributes the core tool set. Always active (no ZACCX_PLUGIN entry needed).
+"! Contributes the core tool set, prompts and resources. Always active (no
+"! ZACCX_PLUGIN entry needed).
 CLASS zcl_accx_core_plugin DEFINITION PUBLIC FINAL CREATE PUBLIC.
 
   PUBLIC SECTION.
@@ -46,6 +47,18 @@ CLASS zcl_accx_core_plugin IMPLEMENTATION.
                       ( NEW zcl_accx_t_get_cds_access( ) )
                       ( NEW zcl_accx_t_find_unprot_cds( ) )
                       ( NEW zcl_accx_t_simulate_cds( ) ) ).
+  ENDMETHOD.
+
+  METHOD zif_accx_plugin~get_prompts.
+    result = VALUE #( ( NEW zcl_accx_p_diagnose_access( ) )
+                      ( NEW zcl_accx_p_fiori_app( ) )
+                      ( NEW zcl_accx_p_access_review( ) ) ).
+  ENDMETHOD.
+
+  METHOD zif_accx_plugin~get_resources.
+    result = VALUE #( ( NEW zcl_accx_r_tool_guide( ) )
+                      ( NEW zcl_accx_r_glossary( ) )
+                      ( NEW zcl_accx_r_faq( ) ) ).
   ENDMETHOD.
 
 ENDCLASS.

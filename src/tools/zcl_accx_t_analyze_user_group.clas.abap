@@ -22,6 +22,8 @@ CLASS zcl_accx_t_analyze_user_group DEFINITION PUBLIC FINAL CREATE PUBLIC
     TYPES: BEGIN OF ty_member,
              user          TYPE string,
              user_type     TYPE string,
+             "! last logon date, empty if never; the findings repeat it, so privacy mode MINIMIZE needs it as a field
+             last_logon    TYPE d,
              "! position of the worst finding in the severity order (1 = most severe)
              severity      TYPE i,
              findings      TYPE string_table,
@@ -178,6 +180,7 @@ CLASS zcl_accx_t_analyze_user_group IMPLEMENTATION.
       IF assessment-finding_codes IS NOT INITIAL.
         APPEND VALUE #( user          = member-user
                         user_type     = type_text
+                        last_logon    = member-last_logon
                         severity      = assessment-severity
                         findings      = assessment-findings
                         finding_codes = assessment-finding_codes ) TO payload->users.

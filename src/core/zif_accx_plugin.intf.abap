@@ -14,7 +14,9 @@ INTERFACE zif_accx_plugin PUBLIC.
            required_core_api TYPE i,
          END OF ty_info.
 
-  TYPES ty_tools TYPE STANDARD TABLE OF REF TO zif_accx_tool WITH EMPTY KEY.
+  TYPES ty_tools     TYPE STANDARD TABLE OF REF TO zif_accx_tool WITH EMPTY KEY.
+  TYPES ty_prompts   TYPE STANDARD TABLE OF REF TO zif_accx_prompt WITH EMPTY KEY.
+  TYPES ty_resources TYPE STANDARD TABLE OF REF TO zif_accx_resource WITH EMPTY KEY.
 
   METHODS get_info
     RETURNING VALUE(result) TYPE ty_info.
@@ -25,5 +27,13 @@ INTERFACE zif_accx_plugin PUBLIC.
 
   METHODS get_tools
     RETURNING VALUE(result) TYPE ty_tools.
+
+  "! Ready-made instructions for the client; optional, none by default
+  METHODS get_prompts DEFAULT IGNORE
+    RETURNING VALUE(result) TYPE ty_prompts.
+
+  "! Background texts for the client; optional, none by default
+  METHODS get_resources DEFAULT IGNORE
+    RETURNING VALUE(result) TYPE ty_resources.
 
 ENDINTERFACE.

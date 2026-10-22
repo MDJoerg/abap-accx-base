@@ -17,12 +17,28 @@ CLASS zcl_accx_registry DEFINITION PUBLIC FINAL CREATE PUBLIC.
              tools   TYPE zif_accx_plugin=>ty_tools,
            END OF ty_cached.
 
-    DATA cache  TYPE HASHED TABLE OF ty_cached WITH UNIQUE KEY profile.
+    TYPES: BEGIN OF ty_guidance,
+             profile   TYPE string,
+             prompts   TYPE zif_accx_plugin=>ty_prompts,
+             resources TYPE zif_accx_plugin=>ty_resources,
+           END OF ty_guidance.
+
+    DATA cache          TYPE HASHED TABLE OF ty_cached WITH UNIQUE KEY profile.
+    DATA guidance_cache TYPE HASHED TABLE OF ty_guidance WITH UNIQUE KEY profile.
     DATA issues TYPE zif_accx_registry=>ty_issues.
 
     METHODS load_tools
       IMPORTING !profile      TYPE string
       RETURNING VALUE(result) TYPE zif_accx_plugin=>ty_tools.
+
+    "! Prompts and resources of the active plugins, loaded once per profile
+    METHODS get_guidance
+      IMPORTING !profile      TYPE string
+      RETURNING VALUE(result) TYPE ty_guidance.
+
+    METHODS load_guidance
+      IMPORTING !profile      TYPE string
+      RETURNING VALUE(result) TYPE ty_guidance.
 
     METHODS get_active_plugins
       IMPORTING !profile      TYPE string
@@ -62,6 +78,61 @@ CLASS zcl_accx_registry IMPLEMENTATION.
         result = tool.
         RETURN.
       ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD zif_accx_registry~get_prompts.
+    result = get_guidance( profile )-prompts.
+  ENDMETHOD.
+
+  METHOD zif_accx_registry~get_resources.
+    result = get_guidance( profile )-resources.
+  ENDMETHOD.
+
+  METHOD get_guidance.
+    READ TABLE guidance_cache INTO result WITH TABLE KEY profile = profile.
+    IF sy-subrc = 0.
+      RETURN.
+    ENDIF.
+    result = load_guidance( profile ).
+    INSERT result INTO TABLE guidance_cache.
+  ENDMETHOD.
+
+  METHOD load_guidance.
+    DATA prompt_names   TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+    DATA resource_uris  TYPE HASHED TABLE OF string WITH UNIQUE KEY table_line.
+
+    result-profile = profile.
+    LOOP AT get_active_plugins( profile ) INTO DATA(plugin).
+      DATA(plugin_id) = ``.
+      DATA(plugin_prompts) = VALUE zif_accx_plugin=>ty_prompts( ).
+      DATA(plugin_resources) = VALUE zif_accx_plugin=>ty_resources( ).
+      TRY.
+          plugin_id = plugin->get_info( )-id.
+          LOOP AT plugin->get_prompts( ) INTO DATA(prompt).
+            DATA(prompt_name) = prompt->get_descriptor( )-name.
+            IF prompt_name IS INITIAL OR line_exists( prompt_names[ table_line = prompt_name ] ).
+              add_issue( plugin_id = plugin_id message = |Prompt without name or duplicate name { prompt_name } ignored| ).
+              CONTINUE.
+            ENDIF.
+            INSERT prompt_name INTO TABLE prompt_names.
+            APPEND prompt TO plugin_prompts.
+          ENDLOOP.
+          LOOP AT plugin->get_resources( ) INTO DATA(resource).
+            DATA(resource_uri) = resource->get_descriptor( )-uri.
+            IF resource_uri IS INITIAL OR line_exists( resource_uris[ table_line = resource_uri ] ).
+              add_issue( plugin_id = plugin_id message = |Resource without URI or duplicate URI { resource_uri } ignored| ).
+              CONTINUE.
+            ENDIF.
+            INSERT resource_uri INTO TABLE resource_uris.
+            APPEND resource TO plugin_resources.
+          ENDLOOP.
+        CATCH cx_root INTO DATA(error).
+          add_issue( plugin_id = plugin_id message = error->get_text( ) ).
+          CONTINUE.
+      ENDTRY.
+      APPEND LINES OF plugin_prompts TO result-prompts.
+      APPEND LINES OF plugin_resources TO result-resources.
     ENDLOOP.
   ENDMETHOD.
 
@@ -186,6 +257,10 @@ CLASS zcl_accx_registry IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD add_issue.
+    " the plugins are walked once for the tools and once for the guidance
+    IF line_exists( issues[ plugin_id = plugin_id message = message ] ).
+      RETURN.
+    ENDIF.
     APPEND VALUE #( plugin_id = plugin_id message = message ) TO issues.
   ENDMETHOD.
 

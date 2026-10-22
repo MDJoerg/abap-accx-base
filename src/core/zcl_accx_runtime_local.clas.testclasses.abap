@@ -82,10 +82,81 @@ CLASS ltd_write_tool IMPLEMENTATION.
 
 ENDCLASS.
 
+"! Test double: prompt with one required argument, relies on echo_user
+CLASS ltd_prompt DEFINITION FINAL FOR TESTING
+  INHERITING FROM zcl_accx_prompt_base.
+
+  PUBLIC SECTION.
+    METHODS zif_accx_prompt~get_descriptor REDEFINITION.
+
+  PROTECTED SECTION.
+    METHODS compose REDEFINITION.
+ENDCLASS.
+
+CLASS ltd_prompt IMPLEMENTATION.
+
+  METHOD zif_accx_prompt~get_descriptor.
+    result = VALUE #( name        = `echo_prompt`
+                      title       = `Echo prompt`
+                      description = `Echoes the topic`
+                      arguments   = VALUE #( ( name = `topic` description = `Topic` required = abap_true ) )
+                      tools       = VALUE #( ( `echo_user` ) ) ).
+  ENDMETHOD.
+
+  METHOD compose.
+    result = |Topic: { value_of( values = values name = `topic` ) }|.
+  ENDMETHOD.
+
+ENDCLASS.
+
+"! Test double: prompt that relies on the write tool
+CLASS ltd_write_prompt DEFINITION FINAL FOR TESTING
+  INHERITING FROM zcl_accx_prompt_base.
+
+  PUBLIC SECTION.
+    METHODS zif_accx_prompt~get_descriptor REDEFINITION.
+
+  PROTECTED SECTION.
+    METHODS compose REDEFINITION.
+ENDCLASS.
+
+CLASS ltd_write_prompt IMPLEMENTATION.
+
+  METHOD zif_accx_prompt~get_descriptor.
+    result = VALUE #( name  = `change_prompt`
+                      tools = VALUE #( ( `echo_user` ) ( `change_thing` ) ) ).
+  ENDMETHOD.
+
+  METHOD compose.
+    result = `change`.
+  ENDMETHOD.
+
+ENDCLASS.
+
+"! Test double: resource that lists the tools visible to the caller
+CLASS ltd_resource DEFINITION FINAL FOR TESTING.
+  PUBLIC SECTION.
+    INTERFACES zif_accx_resource.
+ENDCLASS.
+
+CLASS ltd_resource IMPLEMENTATION.
+
+  METHOD zif_accx_resource~get_descriptor.
+    result = VALUE #( uri = `test://res` name = `res` mime_type = `text/markdown` ).
+  ENDMETHOD.
+
+  METHOD zif_accx_resource~read.
+    result = concat_lines_of( table = visible_tools sep = `,` ).
+  ENDMETHOD.
+
+ENDCLASS.
+
 CLASS ltd_registry DEFINITION FINAL FOR TESTING.
   PUBLIC SECTION.
     INTERFACES zif_accx_registry.
-    DATA tools TYPE zif_accx_plugin=>ty_tools.
+    DATA tools     TYPE zif_accx_plugin=>ty_tools.
+    DATA prompts   TYPE zif_accx_plugin=>ty_prompts.
+    DATA resources TYPE zif_accx_plugin=>ty_resources.
 ENDCLASS.
 
 CLASS ltd_registry IMPLEMENTATION.
@@ -103,6 +174,14 @@ CLASS ltd_registry IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD zif_accx_registry~get_issues ##NEEDED.
+  ENDMETHOD.
+
+  METHOD zif_accx_registry~get_prompts.
+    result = prompts.
+  ENDMETHOD.
+
+  METHOD zif_accx_registry~get_resources.
+    result = resources.
   ENDMETHOD.
 
 ENDCLASS.
@@ -175,6 +254,7 @@ CLASS ltc_runtime DEFINITION FINAL FOR TESTING
 
   PRIVATE SECTION.
     DATA cut        TYPE REF TO zif_accx_runtime.
+    DATA registry   TYPE REF TO ltd_registry.
     DATA privacy    TYPE REF TO ltd_privacy.
     DATA authorizer TYPE REF TO ltd_authorizer.
     DATA logger     TYPE REF TO ltd_logger.
@@ -201,13 +281,23 @@ CLASS ltc_runtime DEFINITION FINAL FOR TESTING
     METHODS authorizer_crash_fails_closed FOR TESTING.
     METHODS write_tool_needs_permission  FOR TESTING.
     METHODS write_plan_then_confirm      FOR TESTING.
+    METHODS prompts_follow_tool_access   FOR TESTING.
+    METHODS prompt_is_rendered           FOR TESTING.
+    METHODS prompt_needs_its_argument    FOR TESTING.
+    METHODS prompt_rejects_bad_values    FOR TESTING.
+    METHODS unknown_prompt_not_found     FOR TESTING.
+    METHODS hidden_prompt_not_found      FOR TESTING.
+    METHODS resource_gets_visible_tools  FOR TESTING.
+    METHODS unknown_resource_not_found   FOR TESTING.
 ENDCLASS.
 
 CLASS ltc_runtime IMPLEMENTATION.
 
   METHOD setup.
-    DATA(registry) = NEW ltd_registry( ).
-    registry->tools = VALUE #( ( NEW ltd_tool( ) ) ( NEW ltd_write_tool( ) ) ).
+    registry = NEW ltd_registry( ).
+    registry->tools     = VALUE #( ( NEW ltd_tool( ) ) ( NEW ltd_write_tool( ) ) ).
+    registry->prompts   = VALUE #( ( NEW ltd_prompt( ) ) ( NEW ltd_write_prompt( ) ) ).
+    registry->resources = VALUE #( ( NEW ltd_resource( ) ) ).
     privacy    = NEW ltd_privacy( ).
     authorizer = NEW ltd_authorizer( ).
     logger     = NEW ltd_logger( ).
@@ -348,6 +438,85 @@ CLASS ltc_runtime IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( exp = zif_accx_types=>co_status-ok act = result-status ).
     " write calls are logged with their outcome, also when ok
     cl_abap_unit_assert=>assert_equals( exp = `executed` act = logger->entries[ 4 ]-message ).
+  ENDMETHOD.
+
+  METHOD prompts_follow_tool_access.
+    " the prompt relying on the write tool needs write permission as well
+    DATA(prompts) = cut->get_prompts( ctx ).
+    cl_abap_unit_assert=>assert_equals( exp = 1 act = lines( prompts ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `echo_prompt` act = prompts[ 1 ]-name ).
+    allow_writing( ).
+    cl_abap_unit_assert=>assert_equals( exp = 2 act = lines( cut->get_prompts( ctx ) ) ).
+    authorizer->deny_group = zif_accx_types=>co_group-user.
+    cl_abap_unit_assert=>assert_initial( cut->get_prompts( ctx ) ).
+  ENDMETHOD.
+
+  METHOD prompt_is_rendered.
+    DATA(result) = cut->get_prompt( name = `echo_prompt`
+                                    args = NEW zcl_accx_args_map( )->set( name = `topic` value = `  roles   and users ` )
+                                    ctx  = ctx ).
+    cl_abap_unit_assert=>assert_equals( exp = zif_accx_types=>co_status-ok act = result-status ).
+    cl_abap_unit_assert=>assert_equals( exp = `Echoes the topic` act = result-description ).
+    cl_abap_unit_assert=>assert_equals( exp = 1 act = lines( result-messages ) ).
+    cl_abap_unit_assert=>assert_equals( exp = zif_accx_prompt=>co_role-user act = result-messages[ 1 ]-role ).
+    " the value is trimmed
+    cl_abap_unit_assert=>assert_equals( exp = `Topic: roles and users` act = result-messages[ 1 ]-text ).
+  ENDMETHOD.
+
+  METHOD prompt_needs_its_argument.
+    DATA(result) = cut->get_prompt( name = `echo_prompt` args = NEW zcl_accx_args_map( ) ctx = ctx ).
+    cl_abap_unit_assert=>assert_equals( exp = zif_accx_types=>co_status-invalid act = result-status ).
+    cl_abap_unit_assert=>assert_char_cp( exp = `*'topic'*` act = result-message ).
+    cl_abap_unit_assert=>assert_initial( result-messages ).
+  ENDMETHOD.
+
+  METHOD prompt_rejects_bad_values.
+    DATA(multi_line) = cut->get_prompt( name = `echo_prompt`
+                                        args = NEW zcl_accx_args_map( )->set( name  = `topic`
+                                                                              value = |a{ cl_abap_char_utilities=>newline }b| )
+                                        ctx  = ctx ).
+    cl_abap_unit_assert=>assert_equals( exp = zif_accx_types=>co_status-invalid act = multi_line-status ).
+    cl_abap_unit_assert=>assert_initial( multi_line-messages ).
+    DATA(too_long) = cut->get_prompt( name = `echo_prompt`
+                                      args = NEW zcl_accx_args_map( )->set( name = `topic` value = repeat( val = `x` occ = 101 ) )
+                                      ctx  = ctx ).
+    cl_abap_unit_assert=>assert_equals( exp = zif_accx_types=>co_status-invalid act = too_long-status ).
+    DATA(longest) = cut->get_prompt( name = `echo_prompt`
+                                     args = NEW zcl_accx_args_map( )->set( name = `topic` value = repeat( val = `x` occ = 100 ) )
+                                     ctx  = ctx ).
+    cl_abap_unit_assert=>assert_equals( exp = zif_accx_types=>co_status-ok act = longest-status ).
+  ENDMETHOD.
+
+  METHOD unknown_prompt_not_found.
+    DATA(result) = cut->get_prompt( name = `nope` args = NEW zcl_accx_args_map( ) ctx = ctx ).
+    cl_abap_unit_assert=>assert_equals( exp = zif_accx_types=>co_status-not_found act = result-status ).
+    cl_abap_unit_assert=>assert_char_cp( exp = `*nope*` act = result-message ).
+  ENDMETHOD.
+
+  METHOD hidden_prompt_not_found.
+    " exists, but its write tool is not offered here
+    DATA(result) = cut->get_prompt( name = `change_prompt` args = NEW zcl_accx_args_map( ) ctx = ctx ).
+    cl_abap_unit_assert=>assert_equals( exp = zif_accx_types=>co_status-not_found act = result-status ).
+    allow_writing( ).
+    result = cut->get_prompt( name = `change_prompt` args = NEW zcl_accx_args_map( ) ctx = ctx ).
+    cl_abap_unit_assert=>assert_equals( exp = zif_accx_types=>co_status-ok act = result-status ).
+  ENDMETHOD.
+
+  METHOD resource_gets_visible_tools.
+    cl_abap_unit_assert=>assert_equals( exp = 1 act = lines( cut->get_resources( ctx ) ) ).
+    DATA(content) = cut->read_resource( uri = `test://res` ctx = ctx ).
+    cl_abap_unit_assert=>assert_equals( exp = zif_accx_types=>co_status-ok act = content-status ).
+    cl_abap_unit_assert=>assert_equals( exp = `text/markdown` act = content-mime_type ).
+    cl_abap_unit_assert=>assert_equals( exp = `echo_user` act = content-text ).
+    allow_writing( ).
+    content = cut->read_resource( uri = `test://res` ctx = ctx ).
+    cl_abap_unit_assert=>assert_equals( exp = `echo_user,change_thing` act = content-text ).
+  ENDMETHOD.
+
+  METHOD unknown_resource_not_found.
+    DATA(content) = cut->read_resource( uri = `test://other` ctx = ctx ).
+    cl_abap_unit_assert=>assert_equals( exp = zif_accx_types=>co_status-not_found act = content-status ).
+    cl_abap_unit_assert=>assert_initial( content-text ).
   ENDMETHOD.
 
 ENDCLASS.

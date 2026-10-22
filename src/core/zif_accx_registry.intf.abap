@@ -19,6 +19,15 @@ INTERFACE zif_accx_registry PUBLIC.
               !profile      TYPE string
     RETURNING VALUE(result) TYPE REF TO zif_accx_tool.
 
+  "! Prompts of the active plugins; they are offered only where their tools are available
+  METHODS get_prompts DEFAULT IGNORE
+    IMPORTING !profile      TYPE string
+    RETURNING VALUE(result) TYPE zif_accx_plugin=>ty_prompts.
+
+  METHODS get_resources DEFAULT IGNORE
+    IMPORTING !profile      TYPE string
+    RETURNING VALUE(result) TYPE zif_accx_plugin=>ty_resources.
+
   "! Plugins skipped or tools rejected while loading (for diagnostics)
   METHODS get_issues
     RETURNING VALUE(result) TYPE ty_issues.

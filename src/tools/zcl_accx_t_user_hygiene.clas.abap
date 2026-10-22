@@ -39,6 +39,8 @@ CLASS zcl_accx_t_user_hygiene DEFINITION PUBLIC FINAL CREATE PUBLIC
              user          TYPE string,
              user_group    TYPE string,
              user_type     TYPE string,
+             "! last logon date, empty if never; the findings repeat it, so privacy mode MINIMIZE needs it as a field
+             last_logon    TYPE d,
              "! position of the worst finding in the severity order (1 = most severe)
              severity      TYPE i,
              findings      TYPE string_table,
@@ -190,7 +192,8 @@ CLASS zcl_accx_t_user_hygiene IMPLEMENTATION.
                                                         inactive_days   = payload->inactive_days ).
       DATA(entry) = VALUE ty_user( user       = member-user
                                    user_group = member-user_group
-                                   user_type  = zcl_accx_user_hygiene=>user_type_text( member-user_type_code ) ).
+                                   user_type  = zcl_accx_user_hygiene=>user_type_text( member-user_type_code )
+                                   last_logon = member-last_logon ).
       LOOP AT assessment-finding_codes INTO DATA(code).
         DATA(text) = assessment-findings[ sy-tabix ].
         IF NOT line_exists( payload->checks[ table_line = code ] ).
