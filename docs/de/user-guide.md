@@ -4,7 +4,7 @@
 
 **Zielgruppe:** SAP-Basis, Berechtigungsadministration, IT-Verantwortliche und Audit
 
-**Release:** 0.33.0, getestet auf ABAP Platform 2023 (SAP_BASIS 758) mit Embedded Fiori Launchpad
+**Release:** 0.34.0, getestet auf ABAP Platform 2023 (SAP_BASIS 758) mit Embedded Fiori Launchpad
 
 ---
 
@@ -70,7 +70,15 @@ Haben sich die Rolle oder die Zuordnungen des Benutzers in der Zwischenzeit geä
 
 **Fail closed.** Ein Fehler in der Berechtigungsprüfung, der Datenschutzschicht oder einem Plugin führt zu „verweigert", nie zu „alles sichtbar".
 
-**Datenschutz.** Kollegen, die für Vergleiche herangezogen werden (etwa bei Rollenempfehlungen), werden gezählt, nicht genannt. Der Datenschutzmodus wird pro Serverprofil eingestellt; derzeit ist nur „vollständige Anzeige" verfügbar.
+**Datenschutz.** Kollegen, die für Vergleiche herangezogen werden (etwa bei Rollenempfehlungen), werden gezählt, nicht genannt. Der Datenschutzmodus wird pro Serverprofil eingestellt (`PRIVACY_MODE` in ZACCX_PROFILE):
+
+| Modus | Benutzer-IDs | Namen, Kontaktdaten | Letzte Anmeldung |
+|---|---|---|---|
+| `NONE` (Standard) | im Klartext | im Klartext | exakt |
+| `PSEUDONYMIZE` | stabiles Pseudonym wie `U-7F3A9C12` | entfernt | exakt |
+| `MINIMIZE` | stabiles Pseudonym | entfernt | auf den Monat gerundet |
+
+Ein Pseudonym bleibt über Aufrufe hinweg gleich, sodass der Client Ergebnisse verknüpfen kann, ohne zu erfahren, wer der Benutzer ist. Gibt der Client ein Pseudonym als Argument zurück, löst ACCX es auf. Aufdecken können Pseudonyme nur Menschen, mit dem Report `ZACCX_PSEUDONYM_RESOLVE` (Anzeigeberechtigung für den Benutzer nötig, jede Abfrage wird protokolliert). Pseudonymisierung ist keine Anonymisierung: Rollen, Benutzergruppen, Anzahlen und die Struktur der Berechtigungen bleiben sichtbar, und eine abgeleitete Zahl wie „keine Anmeldung seit 561 Tagen" lässt das Datum errechnen. Welche Felder als personenbezogen gelten, regeln Regeln, die in der Tabelle ZACCX_PII erweitert werden können; der Schlüssel der Pseudonyme liegt in der Tabelle ZACCX_SECRET, deren Anzeige Sie einschränken sollten.
 
 **Erweiterbar für Kundenregeln.** Eine kundeneigene Verwendungsberechtigung (zum Beispiel ein Kunden-Berechtigungsobjekt) lässt sich per Klasse einhängen. Das kritische Regelwerk kommt standardmäßig aus SUIM und lässt sich durch eine abgeleitete Klasse ersetzen, etwa durch ein GRC-Regelwerk oder eine Security-Baseline.
 
@@ -93,7 +101,7 @@ Typische Profile sind:
 | `bc/access-support` | Support und Analyse, nur lesen |
 | `bc/access-admin` | Wie Support, zusätzlich die Schreibwerkzeuge des Plugins ADMIN (nur wenn das Plugin installiert ist und der Mandant kein Produktivmandant ist) |
 
-Ein Audit-Profil mit der Werkzeuggruppe AUDIT lässt sich in ZACCX_PROFILE auf dieselbe Weise anlegen. Jeder MCP-fähige Client (zum Beispiel Claude Desktop, Claude Code oder eigene Agenten) verbindet sich über eine verschlüsselte Verbindung mit einem benannten SAP-Benutzer mit dem Endpunkt des Profils. Den konkreten Endpunktpfad und die Client-Konfiguration beschreibt der Installationsabschnitt der README.
+Ein Audit-Profil mit der Werkzeuggruppe AUDIT lässt sich in ZACCX_PROFILE auf dieselbe Weise anlegen. Die Zeilen von ZACCX_PROFILE pflegen Sie mit dem Report `ZACCX_PROFILE_MAINTAIN` des optionalen Pakets ZACCX_GUI (anzeigen, anlegen oder ändern mit Prüfungen und Testlauf, löschen). Jeder MCP-fähige Client (zum Beispiel Claude Desktop, Claude Code oder eigene Agenten) verbindet sich über eine verschlüsselte Verbindung mit einem benannten SAP-Benutzer mit dem Endpunkt des Profils. Den konkreten Endpunktpfad und die Client-Konfiguration beschreibt der Installationsabschnitt der README.
 
 Jedes Werkzeug liefert ein strukturiertes Ergebnis und eine kurze Textzusammenfassung. Die meisten Werkzeuge mit Listenergebnis akzeptieren `max_rows` (1–500, Standard 50); abgeschnittene Ergebnisse weisen darauf hin.
 
@@ -308,6 +316,24 @@ Beide Werkzeuge folgen demselben Muster: Der erste Aufruf (ohne `plan_id`) erzeu
 
 **Liefert:** im Planungsaufruf die kritischen Berechtigungen und Kombinationen, die der Benutzer über alle seine Rollen hinweg hinzugewinnen würde, und die Plan-ID; im Ausführungsaufruf das Ergebnis und seine Prüfung. Eigene Zuordnungen des Aufrufers werden nie geändert. Zuordnungen über Sammelrollen lassen sich mit diesem Werkzeug nicht entfernen.
 
+### 4.8 Prompts und Ressourcen
+
+Neben den Werkzeugen bietet der Server Clients, die das unterstützen, **Prompts** und **Ressourcen** an. Sie lesen keine Daten aus dem System; sie sagen dem Modell, wie es die Werkzeuge einsetzt.
+
+| Prompt | Argumente | Was er tut |
+|---|---|---|
+| `diagnose_access_problem` | `user` (Pflicht), `problem` | Führt das Modell durch die Analyse „Benutzer kann X nicht“: Benutzerstatus, fehlgeschlagene Prüfungen, Simulation, Kandidatenrollen. |
+| `fiori_app_not_working` | `user`, `app` (beide Pflicht) | Führt das Modell durch die Kette einer Fiori-App: Katalog, Rolle, Target Mapping, Startberechtigung, OData-Services. |
+| `quarterly_access_review` | `user_group`, `period_days` (1 bis 366, Standard 90) | Führt das Modell durch die periodische Prüfung: Benutzerhygiene, kritische Berechtigungen, Änderungen, Ausreißer, Rollengesundheit, und verlangt eine Befundtabelle. |
+
+| Ressource | Inhalt |
+|---|---|
+| `accx://tool-guide` | Welches Werkzeug welche Frage beantwortet (nur Werkzeuge dieses Servers) und die Regeln für alle Werkzeuge |
+| `accx://glossary` | Begriffe zu Berechtigungen, Rollen, Fiori Launchpad und ACCX |
+| `accx://faq` | Häufige Fragen: ausgeblendete Einträge, Pseudonyme, Auswirkungen auf SU53, Schreibwerkzeuge |
+
+Ein Prompt wird nur angezeigt, wenn der Server alle Werkzeuge anbietet, die er nutzt; ein Support-Profil bietet also keine Prompts an, die Schreibwerkzeuge brauchen. Wie ein Client Prompts darstellt, ist unterschiedlich: Viele zeigen sie als Befehle zur Auswahl, Ressourcen hängt der Benutzer oft selbst an die Unterhaltung an. Die Texte sind im System fest hinterlegt und englisch; das Modell antwortet in der Sprache der Frage. Werte für ein Prompt-Argument werden unverändert eingesetzt; geben Sie deshalb bei einem Server mit Pseudonymen keine echten Benutzernamen in Prompts ein.
+
 ---
 
 ## 5. Wie mache ich ...?
@@ -448,7 +474,7 @@ Hinweis: Schreibzugriffe auf CDS-basierte Business-Objekte regelt die Verhaltens
 - Abgeleitete Rollen und SAP-Vorlagerollen lassen sich nicht direkt ändern (Änderungen laufen über die Referenzrolle, oder es wird eine Kopie angelegt).
 - Die CDS-Simulation unterstützt keine Views mit Parametern oder mit Access-Control-Kontext. Zeilen werden nur gezählt, wenn sich die Bedingung als WHERE-Bedingung darstellen lässt.
 - Archivierte Änderungsbelege, gelöschte Benutzer sowie Adressdaten, Parameter und SNC-Daten erscheinen nicht in der Änderungshistorie.
-- Als Datenschutzmodus ist nur „vollständige Anzeige" verfügbar; Pseudonymisierung ist vorbereitet, aber noch nicht verfügbar.
+- Die Pseudonymisierung erfasst die als personenbezogen bekannten Felder (Regeln eingebaut, in der Tabelle ZACCX_PII erweiterbar) und Wiederholungen ihrer Werte in Texten. Freitext, der eine Person nennt, ohne Teil eines Ergebnisfelds zu sein, abgeleitete Zahlen (Tage ohne Anmeldung) und Zeitpunkte von Änderungsbelegen bleiben unverändert. Der Schlüssel der Pseudonyme liegt in einer Tabelle, nicht im sicheren Speicher.
 - Ob Standardbenutzer noch ihr Standardkennwort haben, wird nicht geprüft (siehe SAP-Report RSUSR003).
 - Schreibzugriffe auf CDS-Entitäten (Verhaltensdefinitionen) werden nicht analysiert.
 

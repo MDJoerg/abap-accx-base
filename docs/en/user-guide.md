@@ -4,7 +4,7 @@
 
 **Audience:** SAP Basis, authorization administrators, IT owners and auditors
 
-**Release:** 0.33.0, tested on ABAP Platform 2023 (SAP_BASIS 758) with the embedded Fiori launchpad
+**Release:** 0.34.0, tested on ABAP Platform 2023 (SAP_BASIS 758) with the embedded Fiori launchpad
 
 ---
 
@@ -70,7 +70,15 @@ If the role or the user's assignments changed in the meantime, the plan expires 
 
 **Fail closed.** An error in the authorization check, the privacy layer or a plugin leads to "denied", never to "everything visible".
 
-**Privacy.** Colleagues used for comparisons (for example in role recommendations) are counted, not named. The privacy mode is configured per server profile; at present only "full display" is available.
+**Privacy.** Colleagues used for comparisons (for example in role recommendations) are counted, not named. The privacy mode is configured per server profile (`PRIVACY_MODE` in ZACCX_PROFILE):
+
+| Mode | User ids | Names, contact data | Last logon |
+|---|---|---|---|
+| `NONE` (default) | clear | clear | exact |
+| `PSEUDONYMIZE` | stable pseudonym such as `U-7F3A9C12` | removed | exact |
+| `MINIMIZE` | stable pseudonym | removed | rounded to the month |
+
+A pseudonym stays the same across calls, so the client can correlate results without learning who the user is. If the client passes a pseudonym back as an argument, ACCX resolves it. Only people can reveal a pseudonym, with report `ZACCX_PSEUDONYM_RESOLVE` (display authorization for the user needed; every lookup is logged). Pseudonymization is not anonymization: roles, user groups, counts and the structure of authorizations stay visible, and a derived figure such as "no logon for 561 days" still allows to compute a date. Which fields count as personal is defined by rules that can be extended in table ZACCX_PII; the key of the pseudonyms is stored in table ZACCX_SECRET, whose display you should restrict.
 
 **Extensible for customer rules.** A customer-specific usage authorization (for example a customer authorization object) can be plugged in through a class. The critical rule set comes from SUIM by default and can be replaced by a derived class, for example to use a GRC rule set or a security baseline.
 
@@ -93,7 +101,7 @@ Typical profiles are:
 | `bc/access-support` | Support and analysis, read-only |
 | `bc/access-admin` | Like support, plus the writing tools of plugin ADMIN (only if the plugin is installed and the client is not a production client) |
 
-An audit profile that exposes the AUDIT tool group can be created in ZACCX_PROFILE in the same way. Any MCP-capable client (for example Claude Desktop, Claude Code or your own agents) connects to the profile's endpoint over an encrypted connection with a named SAP user. The concrete endpoint path and client configuration are described in the installation section of the README.
+An audit profile that exposes the AUDIT tool group can be created in ZACCX_PROFILE in the same way. The rows of ZACCX_PROFILE are maintained with the report `ZACCX_PROFILE_MAINTAIN` of the optional package ZACCX_GUI (list, create or change with checks and a test run, delete). Any MCP-capable client (for example Claude Desktop, Claude Code or your own agents) connects to the profile's endpoint over an encrypted connection with a named SAP user. The concrete endpoint path and client configuration are described in the installation section of the README.
 
 Every tool returns a structured result plus a short text summary. Most list-returning tools accept `max_rows` (1–500, default 50); results that are cut off say so.
 
@@ -308,6 +316,24 @@ Both tools follow the same pattern: the first call (without `plan_id`) creates a
 
 **Returns:** in the planning call, the critical authorizations and combinations the user would gain across all of the user's roles, and the plan id; in the execution call, the result and its verification. The caller's own assignments are never changed. Assignments through composite roles cannot be removed with this tool.
 
+### 4.8 Prompts and resources
+
+Besides tools, the server offers **prompts** and **resources** to clients that support them. They do not read data from the system; they tell the model how to use the tools.
+
+| Prompt | Arguments | What it does |
+|---|---|---|
+| `diagnose_access_problem` | `user` (required), `problem` | Guides the model through the analysis of "user cannot do X": user status, failed checks, simulation, candidate roles. |
+| `fiori_app_not_working` | `user`, `app` (both required) | Guides the model through the chain of a Fiori app: catalog, role, target mapping, start authorization, OData services. |
+| `quarterly_access_review` | `user_group`, `period_days` (1 to 366, default 90) | Guides the model through the periodic review: user hygiene, critical authorizations, changes, outliers, role health, and asks for one findings table. |
+
+| Resource | Content |
+|---|---|
+| `accx://tool-guide` | Which tool answers which question (only tools available on this server) and the rules for all tools |
+| `accx://glossary` | Terms of authorizations, roles, the Fiori launchpad and ACCX |
+| `accx://faq` | Frequent questions: hidden entries, pseudonyms, effects on SU53, write tools |
+
+A prompt is shown only if the server offers all the tools it uses, so a support profile does not offer prompts that need write tools. How a client presents prompts differs: many show them as commands the user can pick, resources are often attached to the conversation by the user. The texts are fixed in the system and are in English; the model answers in the language of the question. Values you give for a prompt argument are inserted as typed, so do not type real user names into prompts of a server that runs with pseudonyms.
+
 ---
 
 ## 5. How do I ...?
@@ -448,7 +474,7 @@ Note: write access to CDS-based business objects is governed by the behavior def
 - Derived roles and SAP template roles cannot be changed directly (changes go through the reference role, or a copy is created).
 - The CDS simulation does not support views with parameters or with an access control context. Rows are counted only if the condition can be expressed as a WHERE condition.
 - Change history does not include archived change documents, deleted users, or address data, parameters and SNC data.
-- The only privacy mode available is "full display"; pseudonymization is prepared but not yet available.
+- Pseudonymization covers the fields known as personal (rules built in, extensible in table ZACCX_PII) and repeats of their values in texts. Free text that names a person without being part of a result field, derived figures (days without logon) and times of change documents stay as they are. The key of the pseudonyms is kept in a table, not in the secure store.
 - Whether standard users still have their default passwords is not checked (see SAP report RSUSR003).
 - Write access to CDS entities (behavior definitions) is not analyzed.
 

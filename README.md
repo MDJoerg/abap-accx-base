@@ -33,8 +33,10 @@ ACCX is split into abapGit repositories, one per ABAP package tree:
 | Repository | ABAP package | Content | Required |
 |---|---|---|---|
 | [abap-accx-base](https://github.com/MDJoerg/abap-accx-base) (this one) | `ZACCX` (`ZACCX_CORE`, `ZACCX_DOMAIN`, `ZACCX_TOOLS`) | SDK-neutral core, domain services, read-only tools, documentation | yes |
-| [abap-accx-mcp2](https://github.com/MDJoerg/abap-accx-mcp2) | `ZACCX_MCP2` | Adapter for the [abap-ai/mcp2](https://github.com/abap-ai/mcp2) MCP SDK | yes, to serve MCP |
+| [abap-accx-mcp2](https://github.com/MDJoerg/abap-accx-mcp2) | `ZACCX_MCP2` | Adapter for the [abap-ai/mcp2](https://github.com/abap-ai/mcp2) MCP SDK | yes, to serve MCP (or mcp1) |
+| [abap-accx-mcp1](https://github.com/MDJoerg/abap-accx-mcp1) | `ZACCX_MCP1` | Adapter for the older [abap-ai/mcp](https://github.com/abap-ai/mcp) MCP SDK | alternative to mcp2 |
 | [abap-accx-plugin-admin](https://github.com/MDJoerg/abap-accx-plugin-admin) | `ZACCX_PLG_ADMIN` | Write tools: role maintenance and role assignment | optional |
+| [abap-accx-gui](https://github.com/MDJoerg/abap-accx-gui) | `ZACCX_GUI` | Report to maintain the server profiles | optional |
 | [abap-accx-test](https://github.com/MDJoerg/abap-accx-test) | `ZACCX_TEST` | Test roles and test data setup for integration tests | optional, not for production |
 
 The core in `ZACCX` does not know the MCP SDK. Only `ZACCX_MCP2` depends on it, so the

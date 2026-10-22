@@ -59,10 +59,12 @@ Ein abapGit-Repository ist eine Installationseinheit. Was unabhängig installier
 |---|---|---|---|---|---|
 | [abap-accx-base](https://github.com/MDJoerg/abap-accx-base) | `ZACCX` | `ZACCX_CORE`, `ZACCX_DOMAIN`, `ZACCX_TOOLS` | Produkt: Verträge, Runtime, Registry, Privacy, Caller-Guard, Domänen-Services, lesende Tools, Konfigurationstabellen | SAP_BASIS, SAP_UI | immer |
 | [abap-accx-mcp2](https://github.com/MDJoerg/abap-accx-mcp2) | `ZACCX_MCP2` | – | MCP-Adapter für das mcp2 SDK | `ZACCX`, mcp2 SDK (`ZAGP_MCP2_*`) | wenn mcp2 der Transportweg ist |
+| [abap-accx-mcp1](https://github.com/MDJoerg/abap-accx-mcp1) | `ZACCX_MCP1` | – | MCP-Adapter für das ältere mcp SDK (`ZAGP_MCP_*`), gleiche Funktionen wie mcp2 | `ZACCX`, mcp SDK | wenn mcp (v1) der Transportweg ist |
 | [abap-accx-plugin-admin](https://github.com/MDJoerg/abap-accx-plugin-admin) | `ZACCX_PLG_ADMIN` | – | Plugin ADMIN: schreibende Tools für Rollenpflege und Rollenzuordnung | `ZACCX` | optional |
+| [abap-accx-gui](https://github.com/MDJoerg/abap-accx-gui) | `ZACCX_GUI` | – | Report zur Pflege der Serverprofile | `ZACCX` | optional |
 | [abap-accx-test](https://github.com/MDJoerg/abap-accx-test) | `ZACCX_TEST` | – | Testdaten-Setup (Testrollen, SUIM-Testregeln) | `ZACCX`, `ZACCX_PLG_ADMIN` | nur Entwicklung / QS |
 
-**Installationsreihenfolge:** mcp2 SDK → `abap-accx-base` → `abap-accx-mcp2` → Plugins (`abap-accx-plugin-admin`) → `abap-accx-test`.
+**Installationsreihenfolge:** mcp2 SDK → `abap-accx-base` → `abap-accx-mcp2` (oder `abap-accx-mcp1`) → Plugins (`abap-accx-plugin-admin`) und `abap-accx-gui` → `abap-accx-test`.
 
 Regeln:
 
@@ -84,10 +86,12 @@ Alle Verträge liegen in `ZACCX_CORE` und sind frei von SDK-Typen.
 | `ZIF_ACCX_ARGS` | `ZCL_ACCX_ARGS_MAP` (im Speicher), `ZCL_ACCX_ARGS_MCP2` (Adapter) | Adapterneutraler Zugriff auf Tool-Argumente (`has`, `get_string`, `get_integer`, `get_boolean`, `get_strings`, `get_names`) |
 | `ZIF_ACCX_CONTEXT` | `ZCL_ACCX_CONTEXT` | Request-Kontext: Aufrufer, Sprache, Zeilenlimit, Serverprofil, System-ID, Caller-Guard, Privacy-Strategie, Authorizer, ob der Client Elicitation kann, und warum schreibende Tools nicht laufen dürfen (`write_problem`) |
 | `ZIF_ACCX_REGISTRY` | `ZCL_ACCX_REGISTRY` | Findet Plugins, sammelt ihre Tools, filtert sie nach den Tool-Gruppen des Profils, lehnt doppelte Namen ab, meldet Plugin-Probleme |
-| `ZIF_ACCX_RUNTIME` | `ZCL_ACCX_RUNTIME_LOCAL` | Einziger Einstieg für Adapter: `get_catalog` (sichtbare Tools) und `execute` (Pipeline, siehe Abschnitt 4). Wirft nie eine Ausnahme; jeder Fehler ist ein Ergebnis mit Status |
-| `ZIF_ACCX_PLUGIN` | `ZCL_ACCX_CORE_PLUGIN` (ID CORE), `ZCL_ACCX_ADMIN_PLUGIN` (ID ADMIN) | Plugin-Vertrag: `get_info` (ID, Titel, Version, benötigte Core-API), `check_prerequisites`, `get_tools` |
+| `ZIF_ACCX_RUNTIME` | `ZCL_ACCX_RUNTIME_LOCAL` | Einziger Einstieg für Adapter: `get_catalog` (sichtbare Tools) und `execute` (Pipeline, siehe Abschnitt 4). Wirft nie eine Ausnahme; jeder Fehler ist ein Ergebnis mit Status; `get_prompts`, `get_prompt`, `get_resources` und `read_resource` für Prompts und Ressourcen |
+| `ZIF_ACCX_PLUGIN` | `ZCL_ACCX_CORE_PLUGIN` (ID CORE), `ZCL_ACCX_ADMIN_PLUGIN` (ID ADMIN) | Plugin-Vertrag: `get_info` (ID, Titel, Version, benötigte Core-API), `check_prerequisites`, `get_tools`, optional `get_prompts` und `get_resources` |
+| `ZIF_ACCX_PROMPT` | `ZCL_ACCX_PROMPT_BASE` (Basisklasse), `ZCL_ACCX_P_*` | Ein Prompt: Descriptor mit Argumenten und den Tools, auf die er sich stützt, `render` (Nachrichten). Wirft nie; ein fehlerhaftes Argument ist ein Ergebnis mit Status `invalid` |
+| `ZIF_ACCX_RESOURCE` | `ZCL_ACCX_R_*` | Eine Ressource: Descriptor (URI, MIME-Typ) und `read`, das die dem Aufrufer verfügbaren Tools erhält |
 | `ZIF_ACCX_LOGGER` | `ZCL_ACCX_LOGGER_DB` | Audit-Log jedes Tool-Aufrufs in `ZACCX_LOG` |
-| `ZIF_ACCX_PRIVACY` | `ZCL_ACCX_PRIVACY_NONE`, `ZCL_ACCX_PRIVACY_WITHHOLD` | Datenschutz-Strategie: `protect_result` (ausgehende Daten), `resolve_args` (eingehende Pseudonyme) |
+| `ZIF_ACCX_PRIVACY` | `ZCL_ACCX_PRIVACY_NONE`, `ZCL_ACCX_PRIVACY_DEFAULT`, `ZCL_ACCX_PRIVACY_WITHHOLD` | Datenschutz-Strategie: `protect_result` (ausgehende Daten), `resolve_args` (eingehende Pseudonyme) |
 | `ZIF_ACCX_AUTHORIZER` | `ZCL_ACCX_AUTHORIZER` (erlaubt), `ZCL_ACCX_AUTHORIZER_DENY` (verweigert) | Erweiterungspunkt Nutzungsberechtigung: `check_endpoint`, `check_tool` |
 | `ZIF_ACCX_CALLER_GUARD` | `ZCL_ACCX_CALLER_GUARD` | Datenbezogene Anzeigeprüfungen des Aufrufers (Benutzer, Benutzergruppen, Rollen, Profile, Berechtigungen, Änderungsbelege, privilegierte CDS-Datenvorschau), pro Request gepuffert |
 | `ZIF_ACCX_PLAN_STORE` | `ZCL_ACCX_PLAN_STORE` | Pläne schreibender Tools in `ZACCX_PLAN`: `create`, `get`, `claim` (einmalig), `close`, `cleanup` |
@@ -158,6 +162,12 @@ Der Core läuft auf jedem nackten ABAP-Stack. Lösungsspezifische oder riskante 
 - **Konflikte:** Tool-Namen sind global eindeutig; CORE wird zuerst geladen, bei einem doppelten Namen gewinnt also der Core und das Plugin-Tool wird ignoriert.
 - **Deinstallation:** Wird das Paket entfernt, fehlt die Klasse, und die veraltete Zeile in `ZACCX_PLUGIN` bleibt wirkungslos.
 
+### Prompts und Ressourcen
+
+Plugins steuern Prompts und Ressourcen wie Tools bei, über die optionalen Methoden `get_prompts` und `get_resources` von `ZIF_ACCX_PLUGIN`. Die Registry sammelt sie (ein doppelter Prompt-Name oder eine doppelte Ressourcen-URI wird abgewiesen, der erste gewinnt), und die Runtime bietet einen Prompt nur an, wenn jedes Tool, auf das er sich stützt, dem Aufrufer in diesem Profil zur Verfügung steht: Werkzeuggruppen des Profils, Schreiberlaubnis und Verwendungsberechtigung gelten für Prompts über ihre Tools. Der Adapter bildet die neutralen Descriptoren auf das Protokoll ab (bei mcp2: prompts/list, prompts/get, resources/list, resources/read); ein Transport ohne diese Funktionen ruft die Runtime-Methoden einfach nicht auf.
+
+Die Texte sind in Klassen fest hinterlegt und enthalten nie Daten aus dem System, so dass nichts, was das System liefert, zu einer Anweisung an das Modell werden kann. Der einzige veränderliche Teil eines Prompts sind seine deklarierten Argumente, die `ZCL_ACCX_PROMPT_BASE` verlangt, trimmt und auf eine Zeile von höchstens 100 Zeichen begrenzt. Prompts und Ressourcen-Lesezugriffe lesen keine Daten und werden nicht ins Audit-Log geschrieben.
+
 ### Plugin ADMIN und die Schreib-Leitplanken
 
 `ZACCX_PLG_ADMIN` liefert die einzigen schreibenden Tools: `apply_role_change` (PFCG-Rolle ändern oder anlegen, Sammelrollen pflegen, Änderungen an abgeleitete Rollen weitergeben) und `assign_role` (Rolle zuordnen, Gültigkeit einer direkten Zuordnung ändern, Zuordnung entfernen). Ein Start von `ZCL_ACCX_ADMIN_PLUGIN` mit F9 in ADT aktiviert das Plugin für das Profil `bc/access-admin` und legt dieses Profil mit Schreiberlaubnis an; in einem Produktivmandanten verweigert es das.
@@ -203,10 +213,13 @@ Der Core läuft auf jedem nackten ABAP-Stack. Lösungsspezifische oder riskante 
 Datenschutz wird zentral in der Runtime angewendet, nicht in jedem Tool.
 
 - `ZIF_ACCX_PRIVACY->protect_result` läuft nach `execute` und **vor** `render_summary`. Die Markdown-Zusammenfassung entsteht damit nur aus geschützten Daten.
-- `ZIF_ACCX_PRIVACY->resolve_args` läuft vor der Validierung; es soll Pseudonyme auf Klarwerte zurückführen, sodass Tools nur Klarwerte sehen.
+- `ZIF_ACCX_PRIVACY->resolve_args` läuft vor der Validierung; es führt Pseudonyme auf Klarwerte zurück, sodass Tools nur Klarwerte sehen. Ein unbekanntes Pseudonym löst `ZCX_ACCX_ERROR` aus (Status `invalid`). Auch die Meldung eines fehlgeschlagenen Tool-Aufrufs läuft durch `protect_result`.
 - Konfiguration pro Profil in `ZACCX_PROFILE`: `PRIVACY_MODE` (`NONE`, `PSEUDONYMIZE`, `MINIMIZE`) oder eine Kundenklasse in `PRIVACY_CLASS`, die `ZIF_ACCX_PRIVACY` implementiert.
-- Umgesetzt: `NONE` (`ZCL_ACCX_PRIVACY_NONE`). Jeder andere Modus, eine nicht nutzbare Klasse oder eine Ausnahme in `protect_result` führt zu `ZCL_ACCX_PRIVACY_WITHHOLD` bzw. einem gleichwertigen Fehlerergebnis: Daten, strukturierte Daten und Zusammenfassung werden mit einer Warnung zurückgehalten.
-- Die Modi `PSEUDONYMIZE` und `MINIMIZE` sind reserviert und noch nicht umgesetzt.
+- `NONE` (`ZCL_ACCX_PRIVACY_NONE`) lässt alles durch. `PSEUDONYMIZE` und `MINIMIZE` setzt `ZCL_ACCX_PRIVACY_DEFAULT` um, von der eine Kundenklasse erben kann (`TRANSFORM_USER_ID`, `TRANSFORM_NAME`, `TRANSFORM_CONTACT`, `TRANSFORM_TIMESTAMP` redefinieren). Ein unbekannter Modus, eine nicht nutzbare Klasse oder eine Ausnahme in `protect_result` führt zu `ZCL_ACCX_PRIVACY_WITHHOLD` bzw. einem gleichwertigen Fehlerergebnis: Daten, strukturierte Daten und Zusammenfassung werden mit einer Warnung zurückgehalten.
+- **Welche Felder personenbezogen sind.** `ZCL_ACCX_PRIVACY_DEFAULT` durchläuft die Ergebnisdaten per RTTI. Ein Feld ist personenbezogen, wenn sein Datenelement (Regelart `D`) oder sein Komponentenname (Art `C`, entweder `NAME` oder `ELTERN-NAME`) eine Regel mit einer der Kategorien `USER_ID`, `USER_LIST`, `NAME`, `CONTACT`, `TIMESTAMP` hat. Die eingebauten Regeln lassen sich in der Tabelle `ZACCX_PII` erweitern oder abschalten (leere Kategorie = Regel aus). Tools enthalten damit keinen Datenschutzcode; ein neues Tool ist abgedeckt, wenn seine Ergebnisfelder solche Datenelemente oder Namen verwenden. Ein Unit-Test (`LTC_AUDIT`) prüft den Ergebnistyp jedes registrierten Tools und schlägt bei personenbezogen aussehenden Feldern ohne Regel fehl.
+- **Texte.** Benutzer-IDs, Namen und gerundete Anmeldezeiten, die in Feldern gefunden wurden, werden auch in allen anderen Zeichenketten des Ergebnisses, in nächsten Schritten und Warnungen an Wortgrenzen ersetzt.
+- **Pseudonyme.** `ZIF_ACCX_PSEUDONYMS` / `ZCL_ACCX_PSEUDONYMS`: `U-` plus die ersten acht Hexzeichen von HMAC-SHA256 über Mandant und Benutzer-ID. Der zufällige Schlüssel liegt pro Mandant in der Tabelle `ZACCX_SECRET` und wird bei der ersten Nutzung erzeugt; `GET_KEY` lässt sich redefinieren, um ihn anders abzulegen. Es wird keine Zuordnung gespeichert: Die Rückwärtssuche vergleicht das Pseudonym mit denen aller Benutzer des Mandanten. Menschen decken Pseudonyme mit dem Report `ZACCX_PSEUDONYM_RESOLVE` auf; ein Tool dafür gibt es nicht.
+- **Fail closed.** Sortierte oder gehashte Tabellen im Ergebnis, serialisierte Ergebnisdaten und Felder, die für ihr Pseudonym zu kurz sind, halten das Ergebnis zurück.
 - Das Audit-Log speichert nie Argumentwerte, nur deren SHA-256-Hash.
 
 ---

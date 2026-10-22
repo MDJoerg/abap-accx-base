@@ -59,10 +59,12 @@ One abapGit repository is one installation unit. Whatever is installed, replaced
 |---|---|---|---|---|---|
 | [abap-accx-base](https://github.com/MDJoerg/abap-accx-base) | `ZACCX` | `ZACCX_CORE`, `ZACCX_DOMAIN`, `ZACCX_TOOLS` | Product: contracts, runtime, registry, privacy, caller guard, domain services, read-only tools, configuration tables | SAP_BASIS, SAP_UI | always |
 | [abap-accx-mcp2](https://github.com/MDJoerg/abap-accx-mcp2) | `ZACCX_MCP2` | – | MCP adapter for the mcp2 SDK | `ZACCX`, mcp2 SDK (`ZAGP_MCP2_*`) | when mcp2 is the transport |
+| [abap-accx-mcp1](https://github.com/MDJoerg/abap-accx-mcp1) | `ZACCX_MCP1` | – | MCP adapter for the older mcp SDK (`ZAGP_MCP_*`), same features as mcp2 | `ZACCX`, mcp SDK | when mcp (v1) is the transport |
 | [abap-accx-plugin-admin](https://github.com/MDJoerg/abap-accx-plugin-admin) | `ZACCX_PLG_ADMIN` | – | Plugin ADMIN: write tools for role maintenance and role assignment | `ZACCX` | optional |
+| [abap-accx-gui](https://github.com/MDJoerg/abap-accx-gui) | `ZACCX_GUI` | – | Report to maintain the server profiles | `ZACCX` | optional |
 | [abap-accx-test](https://github.com/MDJoerg/abap-accx-test) | `ZACCX_TEST` | – | Test data setup (test roles, SUIM test rules) | `ZACCX`, `ZACCX_PLG_ADMIN` | development / QA only |
 
-**Installation order:** mcp2 SDK → `abap-accx-base` → `abap-accx-mcp2` → plugins (`abap-accx-plugin-admin`) → `abap-accx-test`.
+**Installation order:** mcp2 SDK → `abap-accx-base` → `abap-accx-mcp2` (or `abap-accx-mcp1`) → plugins (`abap-accx-plugin-admin`) and `abap-accx-gui` → `abap-accx-test`.
 
 Rules:
 
@@ -84,10 +86,12 @@ All contracts live in `ZACCX_CORE` and are free of SDK types.
 | `ZIF_ACCX_ARGS` | `ZCL_ACCX_ARGS_MAP` (in memory), `ZCL_ACCX_ARGS_MCP2` (adapter) | Adapter-neutral access to tool arguments (`has`, `get_string`, `get_integer`, `get_boolean`, `get_strings`, `get_names`) |
 | `ZIF_ACCX_CONTEXT` | `ZCL_ACCX_CONTEXT` | Request context: caller, language, row limit, server profile, system id, caller guard, privacy strategy, authorizer, whether the client can elicit, and why write tools may not run (`write_problem`) |
 | `ZIF_ACCX_REGISTRY` | `ZCL_ACCX_REGISTRY` | Discovers plugins, collects their tools, filters them by the tool groups of the profile, rejects duplicate names, reports plugin issues |
-| `ZIF_ACCX_RUNTIME` | `ZCL_ACCX_RUNTIME_LOCAL` | Single entry point for adapters: `get_catalog` (visible tools) and `execute` (pipeline, see section 4). Never raises; every failure is a result with a status |
-| `ZIF_ACCX_PLUGIN` | `ZCL_ACCX_CORE_PLUGIN` (id CORE), `ZCL_ACCX_ADMIN_PLUGIN` (id ADMIN) | Plugin contract: `get_info` (id, title, version, required core API), `check_prerequisites`, `get_tools` |
+| `ZIF_ACCX_RUNTIME` | `ZCL_ACCX_RUNTIME_LOCAL` | Single entry point for adapters: `get_catalog` (visible tools) and `execute` (pipeline, see section 4); `get_prompts`, `get_prompt`, `get_resources` and `read_resource` for prompts and resources. Never raises; every failure is a result with a status |
+| `ZIF_ACCX_PLUGIN` | `ZCL_ACCX_CORE_PLUGIN` (id CORE), `ZCL_ACCX_ADMIN_PLUGIN` (id ADMIN) | Plugin contract: `get_info` (id, title, version, required core API), `check_prerequisites`, `get_tools`, optional `get_prompts` and `get_resources` |
+| `ZIF_ACCX_PROMPT` | `ZCL_ACCX_PROMPT_BASE` (base class), `ZCL_ACCX_P_*` | One prompt: descriptor with arguments and the tools it relies on, `render` (messages). Never raises; a bad argument is a result with status `invalid` |
+| `ZIF_ACCX_RESOURCE` | `ZCL_ACCX_R_*` | One resource: descriptor (URI, MIME type) and `read`, which receives the tools available to the caller |
 | `ZIF_ACCX_LOGGER` | `ZCL_ACCX_LOGGER_DB` | Audit log of every tool call into `ZACCX_LOG` |
-| `ZIF_ACCX_PRIVACY` | `ZCL_ACCX_PRIVACY_NONE`, `ZCL_ACCX_PRIVACY_WITHHOLD` | Privacy strategy: `protect_result` (outgoing data), `resolve_args` (incoming pseudonyms) |
+| `ZIF_ACCX_PRIVACY` | `ZCL_ACCX_PRIVACY_NONE`, `ZCL_ACCX_PRIVACY_DEFAULT`, `ZCL_ACCX_PRIVACY_WITHHOLD` | Privacy strategy: `protect_result` (outgoing data), `resolve_args` (incoming pseudonyms) |
 | `ZIF_ACCX_AUTHORIZER` | `ZCL_ACCX_AUTHORIZER` (allows), `ZCL_ACCX_AUTHORIZER_DENY` (denies) | Usage authorization extension point: `check_endpoint`, `check_tool` |
 | `ZIF_ACCX_CALLER_GUARD` | `ZCL_ACCX_CALLER_GUARD` | Data-level display checks of the caller (users, user groups, roles, profiles, authorizations, change documents, privileged CDS data preview), cached per request |
 | `ZIF_ACCX_PLAN_STORE` | `ZCL_ACCX_PLAN_STORE` | Plans of write tools in `ZACCX_PLAN`: `create`, `get`, `claim` (once), `close`, `cleanup` |
@@ -158,6 +162,12 @@ The core runs on any plain ABAP stack. Solution-specific or risky functionality 
 - **Conflicts:** tool names are globally unique; CORE is loaded first, so on a duplicate name the core wins and the plugin tool is ignored.
 - **Uninstall:** if the package is removed, the class is missing and the stale row in `ZACCX_PLUGIN` has no effect.
 
+### Prompts and resources
+
+Plugins contribute prompts and resources the same way as tools, through the optional methods `get_prompts` and `get_resources` of `ZIF_ACCX_PLUGIN`. The registry collects them (a duplicate prompt name or resource URI is rejected, the first wins) and the runtime offers a prompt only if every tool it relies on is available to the caller in that profile: tool groups of the profile, write permission and usage authorization apply to prompts through their tools. The adapter maps the neutral descriptors to the protocol (for mcp2: prompts/list, prompts/get, resources/list, resources/read); a transport without these features simply does not call the runtime methods.
+
+The texts are fixed in classes and never contain data from the system, so nothing the system returns can turn into an instruction to the model. The only variable part of a prompt are its declared arguments, which `ZCL_ACCX_PROMPT_BASE` requires, trims and limits to one line of at most 100 characters. Prompts and resource reads read no data and are not written to the audit log.
+
 ### Plugin ADMIN and the write safeguards
 
 `ZACCX_PLG_ADMIN` contributes the only write tools: `apply_role_change` (change or create a PFCG role, maintain composite roles, pass changes on to derived roles) and `assign_role` (assign a role, change the validity of a direct assignment, remove it). Running `ZCL_ACCX_ADMIN_PLUGIN` with F9 in ADT activates the plugin for profile `bc/access-admin` and creates that profile with write permission; it refuses to do so in a production client.
@@ -203,10 +213,13 @@ The core runs on any plain ABAP stack. Solution-specific or risky functionality 
 Privacy is applied centrally in the runtime, not in each tool.
 
 - `ZIF_ACCX_PRIVACY->protect_result` runs after `execute` and **before** `render_summary`, so the Markdown summary is built from protected data only.
-- `ZIF_ACCX_PRIVACY->resolve_args` runs before validation; it is meant to map pseudonyms back to clear values so that tools only see clear values.
+- `ZIF_ACCX_PRIVACY->resolve_args` runs before validation; it maps pseudonyms back to clear values so that tools only see clear values. An unknown pseudonym raises `ZCX_ACCX_ERROR` (status `invalid`). The message of a failed tool call is passed through `protect_result` as well.
 - Configuration per profile in `ZACCX_PROFILE`: `PRIVACY_MODE` (`NONE`, `PSEUDONYMIZE`, `MINIMIZE`) or a customer class in `PRIVACY_CLASS` implementing `ZIF_ACCX_PRIVACY`.
-- Implemented: `NONE` (`ZCL_ACCX_PRIVACY_NONE`). Any other mode, an unusable class or an exception in `protect_result` leads to `ZCL_ACCX_PRIVACY_WITHHOLD` or an equivalent error result: data, structured data and summary are withheld with a warning.
-- The modes `PSEUDONYMIZE` and `MINIMIZE` are reserved and not implemented yet.
+- `NONE` (`ZCL_ACCX_PRIVACY_NONE`) passes everything. `PSEUDONYMIZE` and `MINIMIZE` are implemented by `ZCL_ACCX_PRIVACY_DEFAULT`, which a customer class can derive from (redefine `TRANSFORM_USER_ID`, `TRANSFORM_NAME`, `TRANSFORM_CONTACT`, `TRANSFORM_TIMESTAMP`). An unknown mode, an unusable class or an exception in `protect_result` leads to `ZCL_ACCX_PRIVACY_WITHHOLD` or an equivalent error result: data, structured data and summary are withheld with a warning.
+- **Which fields are personal.** `ZCL_ACCX_PRIVACY_DEFAULT` walks the result data by RTTI. A field is personal if its data element (rule kind `D`) or its component name (kind `C`, either `NAME` or `PARENT-NAME`) has a rule with one of the categories `USER_ID`, `USER_LIST`, `NAME`, `CONTACT`, `TIMESTAMP`. The built-in rules can be extended or switched off in table `ZACCX_PII` (an empty category switches a rule off). Tools therefore contain no privacy code; a new tool is covered if its result fields use such data elements or names. A unit test (`LTC_AUDIT`) checks the result type of every registered tool and fails for personal-looking fields without a rule.
+- **Texts.** User ids, names and rounded logon times found in fields are also replaced in every other string of the result, in next steps and warnings, at word boundaries.
+- **Pseudonyms.** `ZIF_ACCX_PSEUDONYMS` / `ZCL_ACCX_PSEUDONYMS`: `U-` plus the first eight hex characters of HMAC-SHA256 over client and user id. The random key is stored per client in table `ZACCX_SECRET` and created on first use; redefine `GET_KEY` to keep it elsewhere. No mapping is stored: the reverse lookup compares the pseudonym with those of all users of the client. People reveal pseudonyms with report `ZACCX_PSEUDONYM_RESOLVE`; there is no tool for it.
+- **Fail closed.** Sorted or hashed tables in a result, serialized result data and fields too short for their pseudonym withhold the result.
 - The audit log never stores argument values, only a SHA-256 hash of them.
 
 ---

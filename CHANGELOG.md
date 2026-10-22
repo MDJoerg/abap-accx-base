@@ -5,6 +5,46 @@ release of an installed system is `ZIF_ACCX_TYPES=>CO_RELEASE`. Repository colum
 **base** = abap-accx-base, **mcp2** = abap-accx-mcp2, **admin** = abap-accx-plugin-admin,
 **test** = abap-accx-test.
 
+## 0.35.0 – 2026-10-22
+
+- New adapter package `ZACCX_MCP1` (repository abap-accx-mcp1) for the older
+  [abap-ai/mcp](https://github.com/abap-ai/mcp) SDK, with tools, prompts and resources like
+  the mcp2 adapter. It needs the SDK authorization object `ZMCP_SRV` for the callers.
+- New optional package `ZACCX_GUI` (repository abap-accx-gui): report
+  `ZACCX_PROFILE_MAINTAIN` to list, create, change and delete server profiles, with checks
+  and a test run.
+- Shared by both adapters, new in base: `ZCL_ACCX_RESULT_TEXT` (text of a result) and
+  `ZCL_ACCX_SERVER_INFO` (server description and instructions).
+
+- Prompts and resources for MCP clients (base, mcp2). A **prompt** is a ready-made
+  instruction the user picks in the client; a **resource** is readable background text.
+  New plugin contracts `ZIF_ACCX_PROMPT` and `ZIF_ACCX_RESOURCE`, optional plugin methods
+  `get_prompts` and `get_resources` (existing plugins stay valid, the core API version is
+  unchanged), and runtime methods `get_prompts`, `get_prompt`, `get_resources` and
+  `read_resource`. The MCP2 adapter serves them as prompts/list, prompts/get, resources/list
+  and resources/read.
+- Prompts (CORE plugin): `diagnose_access_problem`, `fiori_app_not_working` and
+  `quarterly_access_review`. A prompt is offered only where all tools it relies on are
+  available to the caller. The texts are fixed and contain no system data; the only variable
+  parts are the declared arguments (one line, at most 100 characters).
+- Resources (CORE plugin): `accx://tool-guide` (which tool for which question, limited to the
+  tools of the server), `accx://glossary` and `accx://faq`.
+
+## 0.34.0 – 2026-10-22
+
+- Privacy modes `PSEUDONYMIZE` and `MINIMIZE` (base), selected with `PRIVACY_MODE` in the
+  server profile. User ids in results become stable pseudonyms (`U-` and eight hex
+  characters, a keyed hash with a random key per client), person names and contact data are
+  removed, and `MINIMIZE` also rounds the last logon to the month. User ids found in the data
+  are replaced in all other text of the result as well. A pseudonym in a tool argument is
+  turned back into the user, so a client can continue with what it was given. Revealing a
+  pseudonym is possible only for people, with the new report `ZACCX_PSEUDONYM_RESOLVE`
+  (display authorization for the user, logged). Table `ZACCX_PII` extends or switches off the
+  rules for personal fields, table `ZACCX_SECRET` holds the key. Results that cannot be
+  protected (sorted or hashed tables, serialized data) are withheld.
+- `get_user_hygiene_report` and `analyze_user_group` return the last logon date per user.
+- The messages of failed tool calls go through the privacy strategy as well.
+
 ## 0.33.0 – 2026-10-21
 
 - New tool `simulate_cds_access` (base): evaluates the CDS access control of a CDS entity for
